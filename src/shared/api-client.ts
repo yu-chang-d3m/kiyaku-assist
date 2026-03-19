@@ -100,6 +100,27 @@ export async function callParse(text: string): Promise<ParseResult> {
   return res.json();
 }
 
+/**
+ * POST /api/ingestion/parse-file
+ * PDF / Word / テキストファイルをアップロードしてパースする
+ */
+export async function callParseFile(file: File): Promise<ParseResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("/api/ingestion/parse-file", {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      (err as { error?: string }).error ?? "ファイルのパースに失敗しました",
+    );
+  }
+  return res.json();
+}
+
 // ========== Analysis ==========
 
 /** Analysis SSE のコールバック */

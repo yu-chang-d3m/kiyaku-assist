@@ -57,7 +57,7 @@ export interface ParseMetadata {
   /** パース時刻（ISO 8601） */
   parsedAt: string;
   /** 入力形式 */
-  sourceFormat: "text" | "pdf";
+  sourceFormat: "text" | "pdf" | "docx";
   /** パース時の注意事項・警告 */
   warnings: string[];
 }

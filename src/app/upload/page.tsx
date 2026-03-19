@@ -20,10 +20,42 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
-import { callParse } from "@/shared/api-client";
+import { callParse, callParseFile } from "@/shared/api-client";
 import type { ParseResult } from "@/domains/ingestion/types";
 import { saveParsedBylaws } from "@/shared/store";
 import { cn } from "@/lib/utils";
+
+// ---------- ファイル形式判定 ----------
+
+/** 対応するファイル拡張子と MIME タイプ */
+const SUPPORTED_FILE_TYPES: Record<string, string> = {
+  "application/pdf": "PDF",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word",
+  "text/plain": "テキスト",
+};
+
+/** 拡張子からファイル種別を判定する */
+function getFileTypeLabel(file: File): string | null {
+  // MIME タイプで判定
+  if (SUPPORTED_FILE_TYPES[file.type]) return SUPPORTED_FILE_TYPES[file.type];
+  // 拡張子フォールバック
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  if (ext === "pdf") return "PDF";
+  if (ext === "docx") return "Word";
+  if (ext === "txt") return "テキスト";
+  return null;
+}
+
+/** ファイルがバイナリ形式（PDF/Word）かどうか */
+function isBinaryFile(file: File): boolean {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  return (
+    file.type === "application/pdf" ||
+    file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    ext === "pdf" ||
+    ext === "docx"
+  );
+}
 
 // ---------- 型定義 ----------
 
@@ -191,26 +223,31 @@ export default function UploadPage() {
     }
   }, []);
 
+  /** ファイルアップロード（PDF/Word）→ パース結果を処理する */
+  const executeParseFile = useCallback(async (f: File) => {
+    setState("parsing");
+    setShowDemoOption(false);
+    try {
+      const result = await callParseFile(f);
+      setParseResult(result);
+      setState("confirming");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "ファイルのパース処理中にエラーが発生しました";
+      setErrorMessage(message);
+      setShowDemoOption(true);
+      setState("error");
+    }
+  }, []);
+
   /** ファイル選択・ドロップ時のハンドラ */
   const handleFile = useCallback(
     async (f: File) => {
-      // PDF / Word はテキスト形式へ誘導
-      if (
-        f.type === "application/pdf" ||
-        f.type ===
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      ) {
-        setErrorMessage(
-          "現在はテキスト形式 (.txt) のみ対応しています。PDFやWordファイルはテキスト形式に変換してからアップロードしてください。",
-        );
-        setState("error");
-        return;
-      }
+      const typeLabel = getFileTypeLabel(f);
 
-      // テキストファイル以外を弾く
-      if (f.type !== "text/plain" && !f.name.endsWith(".txt")) {
+      if (!typeLabel) {
         setErrorMessage(
-          "対応していないファイル形式です。テキストファイル (.txt) をアップロードしてください。",
+          "対応していないファイル形式です。PDF (.pdf)、Word (.docx)、テキスト (.txt) のいずれかをアップロードしてください。",
         );
         setState("error");
         return;
@@ -220,8 +257,14 @@ export default function UploadPage() {
       setState("uploading");
 
       try {
-        const text = await f.text();
-        await executeParse(text);
+        if (isBinaryFile(f)) {
+          // PDF / Word はファイルアップロード API を使用
+          await executeParseFile(f);
+        } else {
+          // テキストファイルは従来のテキスト API を使用
+          const text = await f.text();
+          await executeParse(text);
+        }
       } catch (err) {
         const message =
           err instanceof Error
@@ -231,7 +274,7 @@ export default function UploadPage() {
         setState("error");
       }
     },
-    [executeParse],
+    [executeParse, executeParseFile],
   );
 
   const handleDrop = useCallback(
@@ -344,7 +387,7 @@ export default function UploadPage() {
                     またはクリックしてファイルを選択
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    対応形式: テキスト (.txt) ※ PDF / Word は今後対応予定
+                    対応形式: PDF (.pdf) / Word (.docx) / テキスト (.txt)
                   </p>
                   <input
                     id="file-input"
@@ -356,7 +399,7 @@ export default function UploadPage() {
                 </div>
 
                 {/* テキスト直接入力の代替手段 */}
-                <div className="mt-6 text-center">
+                <div className="mt-6 text-center space-y-2">
                   <p className="text-sm text-muted-foreground">
                     スキャンした紙の規約しかない場合は、
                     <button
@@ -365,6 +408,9 @@ export default function UploadPage() {
                     >
                       テキストを直接貼り付け
                     </button>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Google Docs の場合: メニューの「ファイル」→「ダウンロード」→「Microsoft Word (.docx)」でダウンロードしてからアップロードしてください
                   </p>
                 </div>
               </>
@@ -442,6 +488,9 @@ export default function UploadPage() {
               {file && (
                 <p className="text-sm text-muted-foreground">
                   {file.name}（{((file.size ?? 0) / 1024).toFixed(0)} KB）
+                  {getFileTypeLabel(file) && (
+                    <span className="ml-1 text-xs">— {getFileTypeLabel(file)}形式</span>
+                  )}
                 </p>
               )}
               {state === "parsing" && (

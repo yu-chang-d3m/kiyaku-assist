@@ -4,11 +4,14 @@
  * POST /api/ingestion/parse-file
  * multipart/form-data でファイルを受け取り、構造化データ（ParseResult）に変換して返す。
  * 対応形式: PDF (.pdf)、Word (.docx)、テキスト (.txt)
+ *
+ * 注意: パーサーは動的インポートする。pdf-parse が pdfjs-dist (DOMMatrix) に依存しており、
+ * Cloud Run 環境で静的インポートするとモジュール全体がクラッシュするため。
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeParseResult } from "@/domains/ingestion/normalizer";
-import { TextParser, PdfParser, DocxParser } from "@/domains/ingestion/parsers";
+import type { ParseResult } from "@/domains/ingestion/types";
 import { logger } from "@/shared/observability/logger";
 
 /** 最大ファイルサイズ: 10MB */
@@ -68,20 +71,24 @@ export async function POST(request: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
 
-    let rawResult;
+    // 動的インポートでパーサーをロード（pdf-parse の DOMMatrix 依存が他に波及しないようにする）
+    let rawResult: ParseResult;
     switch (fileType) {
       case "pdf": {
+        const { PdfParser } = await import("@/domains/ingestion/parsers/pdf-parser");
         const parser = new PdfParser();
         rawResult = await parser.parseBuffer(buffer);
         break;
       }
       case "docx": {
+        const { DocxParser } = await import("@/domains/ingestion/parsers/docx-parser");
         const parser = new DocxParser();
         rawResult = await parser.parseBuffer(buffer);
         break;
       }
       case "text":
       default: {
+        const { TextParser } = await import("@/domains/ingestion/parsers/text-parser");
         const parser = new TextParser();
         const text = buffer.toString("utf-8");
         rawResult = await parser.parse(text);

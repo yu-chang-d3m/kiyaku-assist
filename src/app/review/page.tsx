@@ -33,9 +33,11 @@ import {
   callDraftSingle,
 } from "@/shared/api-client";
 import type { ReviewArticle } from "@/shared/db/types";
+import type { GapAnalysisItem } from "@/domains/analysis/types";
 import {
   useProjectStore,
   loadProjectId,
+  loadGapResults,
   saveReviewDecisions,
   loadReviewDecisions,
   saveReviewMemos,
@@ -95,14 +97,52 @@ export default function ReviewPage() {
 
   // ---------- 初期化 ----------
 
+  /** GapAnalysisItem → ReviewArticle に変換する */
+  const gapItemsToReviewArticles = useCallback(
+    (items: GapAnalysisItem[], pid: string): ReviewArticle[] => {
+      return items.map((item, index) => ({
+        id: item.articleNum,
+        projectId: pid,
+        chapter: 0,
+        articleNum: item.articleNum,
+        original: item.currentText,
+        draft: "",
+        summary: item.gapSummary,
+        explanation: item.rationale,
+        importance: item.importance,
+        baseRef: item.standardRef,
+        decision: null,
+        modificationHistory: [],
+        memo: "",
+        category: item.category,
+      }));
+    },
+    [],
+  );
+
   const initialize = useCallback(async () => {
     try {
       const pid = loadProjectId() ?? "default";
-      const { articles: fetched } = await getReviewArticles(pid);
 
+      // まず Firestore からレビュー記事を取得
+      let fetched: ReviewArticle[] = [];
+      try {
+        const result = await getReviewArticles(pid);
+        fetched = result.articles ?? [];
+      } catch (fetchErr) {
+        // Firestore 取得失敗（権限不足含む）→ フォールバック
+        console.warn("Firestore からの取得に失敗、ローカルデータを使用:", fetchErr);
+      }
+
+      // Firestore にデータがない場合、sessionStorage のギャップ分析結果から生成
       if (!fetched || fetched.length === 0) {
-        router.push("/analysis");
-        return;
+        const gapResults = loadGapResults();
+        if (gapResults && gapResults.length > 0) {
+          fetched = gapItemsToReviewArticles(gapResults, pid);
+        } else {
+          router.push("/analysis");
+          return;
+        }
       }
 
       setArticles(fetched);
@@ -112,7 +152,6 @@ export default function ReviewPage() {
       if (savedDecisions && Object.keys(savedDecisions).length > 0) {
         setDecisions(savedDecisions);
       } else {
-        // API から取得した decision を初期値としてセット
         const initialDecisions: Record<string, string> = {};
         for (const a of fetched) {
           if (a.id && a.decision) {
@@ -126,7 +165,6 @@ export default function ReviewPage() {
       if (savedMemos && Object.keys(savedMemos).length > 0) {
         setMemos(savedMemos);
       } else {
-        // API から取得した memo を初期値としてセット
         const initialMemos: Record<string, string> = {};
         for (const a of fetched) {
           if (a.id && a.memo) {
@@ -144,7 +182,7 @@ export default function ReviewPage() {
       );
       setPhase("error");
     }
-  }, [router]);
+  }, [router, gapItemsToReviewArticles]);
 
   useEffect(() => {
     if (initDone.current) return;

@@ -273,7 +273,7 @@ export default function AnalysisPage() {
               </div>
               <Progress value={progressPercent} className="h-2" />
               <p className="text-xs text-muted-foreground">
-                条文ごとにAIが分析を行います。しばらくお待ちください。
+                複数条文をまとめてAIが分析します。しばらくお待ちください。
               </p>
             </CardContent>
           </Card>

@@ -145,14 +145,199 @@ ${standardTexts}
   return item;
 }
 
+// ---------- バッチ分析用 tool_use スキーマ ----------
+
+/** 複数条文を一括分析するための構造化出力スキーマ */
+const BATCH_GAP_ANALYSIS_TOOL = {
+  name: "output_batch_gap_analysis" as const,
+  description: "複数条文のギャップ分析結果をまとめて構造化出力する",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      items: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            articleNum: {
+              type: "string" as const,
+              description: "対象の条文番号（入力と同じ値を返す）",
+            },
+            gapType: {
+              type: "string" as const,
+              enum: ["missing", "outdated", "partial", "compliant", "custom"],
+              description: "ギャップの種類",
+            },
+            importance: {
+              type: "string" as const,
+              enum: ["mandatory", "recommended", "optional"],
+              description: "重要度（mandatory: 法令上必須、recommended: 推奨、optional: 任意）",
+            },
+            gapSummary: {
+              type: "string" as const,
+              description: "ギャップの概要（200文字以内）",
+            },
+            rationale: {
+              type: "string" as const,
+              description: "改正の理由・背景（組合員に説明できるレベル）",
+            },
+            relatedLawRefs: {
+              type: "array" as const,
+              items: { type: "string" as const },
+              description: "関連する改正区分所有法の条文番号",
+            },
+          },
+          required: ["articleNum", "gapType", "importance", "gapSummary", "rationale", "relatedLawRefs"],
+        },
+        description: "各条文のギャップ分析結果",
+      },
+    },
+    required: ["items"],
+  },
+};
+
+/** バッチ分析の出力型 */
+interface BatchGapAnalysisOutput {
+  items: Array<GapAnalysisOutput & { articleNum: string }>;
+}
+
+/** バッチサイズ（1回の API 呼び出しで分析する条文数） */
+const BATCH_SIZE = 10;
+
+// ---------- バッチ分析 ----------
+
+/**
+ * 複数条文をまとめて 1 回の Claude API で分析する
+ */
+async function analyzeBatchArticles(
+  articles: Array<{
+    articleNum: string;
+    category: string;
+    currentText: string | null;
+    relatedDocs: RetrievedDocument[];
+  }>,
+): Promise<GapAnalysisItem[]> {
+  // キャッシュチェック: 全条文がキャッシュにある場合はスキップ
+  const cachedItems: GapAnalysisItem[] = [];
+  const uncachedArticles: typeof articles = [];
+
+  for (const article of articles) {
+    const cacheKey = generateCacheKey(
+      "gap_analysis",
+      article.articleNum,
+      article.currentText ?? "",
+      article.relatedDocs.map((d) => d.content).join(""),
+    );
+    const cached = await getCachedResponse(cacheKey);
+    if (cached) {
+      logger.info({ articleNum: article.articleNum }, "キャッシュヒット: ギャップ分析");
+      cachedItems.push(cached as GapAnalysisItem);
+    } else {
+      uncachedArticles.push(article);
+    }
+  }
+
+  if (uncachedArticles.length === 0) {
+    return cachedItems;
+  }
+
+  // バッチプロンプトを構築
+  const articleSections = uncachedArticles.map((a) => {
+    const standardTexts = a.relatedDocs
+      .map((d) => `【${d.metadata["ref"] ?? "参照"}】\n${d.content}`)
+      .join("\n\n");
+
+    if (a.currentText) {
+      return `### ${a.articleNum}（カテゴリ: ${a.category}）\n**現行規約:**\n${a.currentText}\n\n**対応する標準管理規約:**\n${standardTexts || "（該当なし）"}`;
+    }
+    return `### ${a.articleNum}（カテゴリ: ${a.category}）\n**現行規約:** なし（新規追加候補）\n\n**標準管理規約:**\n${standardTexts || "（該当なし）"}`;
+  }).join("\n\n---\n\n");
+
+  const systemPrompt = `あなたはマンション管理規約の専門家です。
+現行規約の条文と、令和7年改正の国交省標準管理規約（単棟型）を比較し、
+ギャップ分析を行ってください。
+
+分析の観点:
+1. 改正区分所有法（2025年10月施行）への適合性
+2. 標準管理規約との乖離度
+3. 実務上の重要性（mandatory: 法令違反のリスクあり、recommended: 対応推奨、optional: 対応任意）
+
+以下の${uncachedArticles.length}件の条文をすべて分析し、各条文について結果を出力してください。
+articleNum は入力と完全に一致する値を返してください。`;
+
+  const userPrompt = `以下の条文について一括ギャップ分析を行ってください。\n\n${articleSections}`;
+
+  const result = await callWithStructuredOutput<BatchGapAnalysisOutput>({
+    model: MODELS.ANALYSIS,
+    system: systemPrompt,
+    userMessage: userPrompt,
+    tool: BATCH_GAP_ANALYSIS_TOOL,
+    maxTokens: 8192,
+  });
+
+  // 結果をマッピング
+  const resultMap = new Map(result.items.map((r) => [r.articleNum, r]));
+  const batchItems: GapAnalysisItem[] = [];
+
+  for (const article of uncachedArticles) {
+    const analysisOutput = resultMap.get(article.articleNum);
+    if (!analysisOutput) {
+      logger.warn({ articleNum: article.articleNum }, "バッチ分析で結果が返されなかった条文");
+      // フォールバック: 単一条文分析にフォールバック
+      try {
+        const fallback = await analyzeArticle(
+          article.articleNum,
+          article.category,
+          article.currentText,
+          article.relatedDocs,
+        );
+        batchItems.push(fallback);
+      } catch (err) {
+        logger.error({ articleNum: article.articleNum, err }, "フォールバック分析にも失敗");
+      }
+      continue;
+    }
+
+    const item: GapAnalysisItem = {
+      articleNum: article.articleNum,
+      category: article.category,
+      currentText: article.currentText,
+      standardText: article.relatedDocs[0]?.content ?? "",
+      standardRef: article.relatedDocs[0]?.metadata["ref"] ?? "",
+      gapSummary: analysisOutput.gapSummary,
+      gapType: analysisOutput.gapType,
+      importance: analysisOutput.importance,
+      rationale: analysisOutput.rationale,
+      relatedLawRefs: analysisOutput.relatedLawRefs,
+    };
+
+    // キャッシュ保存
+    const cacheKey = generateCacheKey(
+      "gap_analysis",
+      article.articleNum,
+      article.currentText ?? "",
+      article.relatedDocs.map((d) => d.content).join(""),
+    );
+    await setCachedResponse(cacheKey, item, 30);
+
+    batchItems.push(item);
+  }
+
+  return [...cachedItems, ...batchItems];
+}
+
 // ---------- 公開 API ----------
 
 /**
- * 複数条文のギャップ分析を並列実行する
+ * 複数条文のギャップ分析をバッチで実行する
+ *
+ * 最大 BATCH_SIZE 条文をまとめて 1 回の Claude API で分析し、
+ * バッチを concurrency 並列で実行する。
  *
  * @param projectId - プロジェクト ID
  * @param articles - 分析対象の条文リスト
- * @param concurrency - 並列実行数（デフォルト: 5）
+ * @param onBatchComplete - バッチ完了時のコールバック（進捗通知用）
+ * @param concurrency - 並列実行数（デフォルト: 2）
  * @returns 分析結果
  */
 export async function analyzeGaps(
@@ -163,39 +348,53 @@ export async function analyzeGaps(
     currentText: string | null;
     relatedDocs: RetrievedDocument[];
   }>,
-  concurrency: number = 5,
+  onBatchComplete?: (completedCount: number, totalCount: number, batchArticleNums: string[]) => void,
+  concurrency: number = 2,
 ): Promise<AnalysisResult> {
   logger.info(
-    { projectId, articleCount: articles.length, concurrency },
-    "ギャップ分析を開始",
+    { projectId, articleCount: articles.length, batchSize: BATCH_SIZE, concurrency },
+    "ギャップ分析を開始（バッチモード）",
   );
 
   const items: GapAnalysisItem[] = [];
   const errors: Array<{ articleNum: string; error: string }> = [];
+  let completedCount = 0;
 
-  // 並列実行数を制限して処理
-  for (let i = 0; i < articles.length; i += concurrency) {
-    const batch = articles.slice(i, i + concurrency);
+  // BATCH_SIZE ごとにバッチを作成
+  const batches: Array<typeof articles> = [];
+  for (let i = 0; i < articles.length; i += BATCH_SIZE) {
+    batches.push(articles.slice(i, i + BATCH_SIZE));
+  }
+
+  // concurrency 並列でバッチを実行
+  for (let i = 0; i < batches.length; i += concurrency) {
+    const concurrentBatches = batches.slice(i, i + concurrency);
     const results = await Promise.allSettled(
-      batch.map((a) =>
-        analyzeArticle(a.articleNum, a.category, a.currentText, a.relatedDocs),
-      ),
+      concurrentBatches.map((batch) => analyzeBatchArticles(batch)),
     );
 
     for (let j = 0; j < results.length; j++) {
       const result = results[j];
+      const batch = concurrentBatches[j];
+      const batchArticleNums = batch.map((a) => a.articleNum);
+
       if (result.status === "fulfilled") {
-        items.push(result.value);
+        items.push(...result.value);
+        completedCount += batch.length;
+        onBatchComplete?.(completedCount, articles.length, batchArticleNums);
       } else {
-        const articleNum = batch[j].articleNum;
         logger.error(
-          { articleNum, error: result.reason },
-          "ギャップ分析に失敗",
+          { batchArticleNums, error: result.reason },
+          "バッチ分析に失敗",
         );
-        errors.push({
-          articleNum,
-          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-        });
+        for (const article of batch) {
+          errors.push({
+            articleNum: article.articleNum,
+            error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+          });
+        }
+        completedCount += batch.length;
+        onBatchComplete?.(completedCount, articles.length, batchArticleNums);
       }
     }
   }

@@ -4,11 +4,14 @@
  * POST /api/analysis/start
  * 管理規約の条文リストを受け取り、標準管理規約との差分分析を実行する。
  * 進捗は Server-Sent Events (SSE) でリアルタイムに返却する。
+ *
+ * v2.1: バッチ分析対応 — 最大10条文をまとめて1回のClaude API呼び出しで分析し、
+ * 処理速度を約4倍に改善。
  */
 
 import { NextRequest } from "next/server";
 import * as z from "zod/v4";
-import { retrieveRelatedStandards } from "@/domains/analysis/retriever";
+import { batchRetrieve } from "@/domains/analysis/retriever";
 import { analyzeGaps } from "@/domains/analysis/analyzer";
 import { logger } from "@/shared/observability/logger";
 
@@ -66,32 +69,41 @@ export async function POST(request: NextRequest) {
 
       try {
         const total = articles.length;
-        logger.info({ projectId, totalArticles: total }, "ギャップ分析を開始");
+        logger.info({ projectId, totalArticles: total }, "ギャップ分析を開始（バッチモード）");
 
-        // 各条文に対して関連標準条文を取得（進捗を送信）
-        const articlesWithDocs = [];
-        for (let i = 0; i < articles.length; i++) {
-          const article = articles[i];
-          send("progress", {
-            current: i + 1,
-            total,
-            articleNum: article.articleNum,
-          });
+        // Phase 1: 関連条文をバッチ検索（3 並列）
+        send("progress", {
+          current: 0,
+          total,
+          articleNum: "関連条文を検索中...",
+        });
 
-          const retrievalResult = await retrieveRelatedStandards(
-            article.currentText ?? "",
-          );
+        const retrievalResults = await batchRetrieve(
+          articles.map((a) => a.currentText ?? ""),
+        );
 
-          articlesWithDocs.push({
-            articleNum: article.articleNum,
-            category: article.category,
-            currentText: article.currentText,
-            relatedDocs: retrievalResult.results,
-          });
-        }
+        // 条文データと検索結果を結合
+        const articlesWithDocs = articles.map((article, i) => ({
+          articleNum: article.articleNum,
+          category: article.category,
+          currentText: article.currentText,
+          relatedDocs: retrievalResults[i]?.results ?? [],
+        }));
 
-        // 分析を一括実行
-        const analysisResult = await analyzeGaps(projectId, articlesWithDocs);
+        // Phase 2: バッチ分析（進捗コールバック付き）
+        const analysisResult = await analyzeGaps(
+          projectId,
+          articlesWithDocs,
+          (completedCount, totalCount, batchArticleNums) => {
+            const first = batchArticleNums[0];
+            const last = batchArticleNums[batchArticleNums.length - 1];
+            send("progress", {
+              current: completedCount,
+              total: totalCount,
+              articleNum: `${first}〜${last} 分析完了`,
+            });
+          },
+        );
 
         logger.info(
           { projectId, analyzedCount: analysisResult.items.length },

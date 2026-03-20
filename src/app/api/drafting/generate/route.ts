@@ -3,6 +3,7 @@
  *
  * POST /api/drafting/generate
  * 複数条文のドラフトを一括生成し、SSE（Server-Sent Events）で進捗を返却する。
+ * サーバー側でリトリーバーを呼び出し、標準管理規約テキストを取得してから生成する。
  * 生成完了後、結果を Firestore に一括保存する。
  */
 
@@ -10,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as z from "zod/v4";
 import { batchGenerateDrafts } from "@/domains/drafting/drafter";
 import type { DraftRequest } from "@/domains/drafting/types";
+import { batchRetrieve } from "@/domains/analysis/retriever";
 import { batchSaveReviewArticles } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
 
@@ -22,12 +24,11 @@ const condoContextSchema = z.object({
   unitCount: z.enum(["small", "medium", "large", "xlarge"]),
 });
 
-/** ドラフト対象条文スキーマ */
+/** ドラフト対象条文スキーマ（standardText はサーバー側で取得） */
 const draftItemSchema = z.object({
   articleNum: z.string().min(1, "条番号は必須です"),
   category: z.string().min(1, "カテゴリは必須です"),
   currentText: z.string().nullable(),
-  standardText: z.string().default(""),
   gapSummary: z.string().min(1, "ギャップ概要は必須です"),
   importance: z.enum(["mandatory", "recommended", "optional"]),
 });
@@ -63,14 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { projectId, items, condoContext } = parsed.data;
-
-    // items を DraftRequest[] に変換（condoContext を各 item に付与）
-    const draftRequests: DraftRequest[] = items.map((item) => ({
-      ...item,
-      condoContext,
-    }));
-
-    const total = draftRequests.length;
+    const total = items.length;
 
     logger.info(
       { projectId, total },
@@ -88,10 +82,29 @@ export async function POST(request: NextRequest) {
         };
 
         try {
-          // 進捗を送信しながらバッチ生成を実行
-          // batchGenerateDrafts は内部で並列処理するため、
-          // 開始前に total を通知し、生成後に完了を通知する
-          send("progress", { current: 0, total, articleNum: "" });
+          send("progress", { current: 0, total, articleNum: "標準管理規約を検索中..." });
+
+          // リトリーバーで標準管理規約テキストを一括取得
+          const queryTexts = items.map((item) => item.currentText ?? item.gapSummary);
+          const retrievalResults = await batchRetrieve(queryTexts);
+
+          // items にリトリーバー結果を結合して DraftRequest[] を構築
+          const draftRequests: DraftRequest[] = items.map((item, i) => ({
+            articleNum: item.articleNum,
+            category: item.category,
+            currentText: item.currentText,
+            standardText: retrievalResults[i]?.results[0]?.content ?? "",
+            gapSummary: item.gapSummary,
+            importance: item.importance,
+            condoContext,
+          }));
+
+          logger.info(
+            { projectId, retrievedCount: retrievalResults.filter(r => r.results.length > 0).length },
+            "標準管理規約テキストの取得完了",
+          );
+
+          send("progress", { current: 0, total, articleNum: "ドラフト生成中..." });
 
           const batchResult = await batchGenerateDrafts(draftRequests);
 
@@ -106,14 +119,13 @@ export async function POST(request: NextRequest) {
 
           // Firestore に一括保存
           const reviewArticles = batchResult.drafts.map((draft) => {
-            // 対応する元リクエストを検索して currentText を取得
             const originalItem = items.find(
               (item) => item.articleNum === draft.articleNum,
             );
 
             return {
               projectId,
-              chapter: 0, // 章番号はカテゴリから別途設定可能
+              chapter: 0,
               articleNum: draft.articleNum,
               original: originalItem?.currentText ?? null,
               draft: draft.draft,

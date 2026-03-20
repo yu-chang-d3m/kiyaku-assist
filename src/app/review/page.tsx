@@ -297,7 +297,6 @@ export default function ReviewPage() {
         articleNum: article.articleNum,
         category: article.category,
         currentText: article.original,
-        standardText: "",
         gapSummary: article.summary,
         importance: article.importance,
         condoContext: { condoName: "マンション", condoType: "unknown", unitCount: "medium" },

@@ -3,11 +3,13 @@
  *
  * POST /api/drafting/single
  * 1条文のドラフトを再生成する。特定条文のリトライや再生成に使用する。
+ * サーバー側でリトリーバーを呼び出し、標準管理規約テキストを取得してから生成する。
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import * as z from "zod/v4";
 import { generateDraft } from "@/domains/drafting/drafter";
+import { retrieveRelatedStandards } from "@/domains/analysis/retriever";
 import { logger } from "@/shared/observability/logger";
 
 // ---------- Zod スキーマ ----------
@@ -19,12 +21,11 @@ const condoContextSchema = z.object({
   unitCount: z.enum(["small", "medium", "large", "xlarge"]),
 });
 
-/** DraftRequest のバリデーションスキーマ */
+/** DraftRequest のバリデーションスキーマ（standardText はサーバー側で取得） */
 const draftRequestSchema = z.object({
   articleNum: z.string().min(1, "条番号は必須です"),
   category: z.string().min(1, "カテゴリは必須です"),
   currentText: z.string().nullable(),
-  standardText: z.string().default(""),
   gapSummary: z.string().min(1, "ギャップ概要は必須です"),
   importance: z.enum(["mandatory", "recommended", "optional"]),
   condoContext: condoContextSchema,
@@ -53,20 +54,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const draftRequest = parsed.data;
+    const { articleNum, category, currentText, gapSummary, importance, condoContext } = parsed.data;
+
+    logger.info({ articleNum }, "単一ドラフト生成を開始");
+
+    // リトリーバーで標準管理規約テキストを取得
+    const queryText = currentText ?? gapSummary;
+    const retrieval = await retrieveRelatedStandards(queryText);
+    const standardText = retrieval.results[0]?.content ?? "";
+    const standardRef = retrieval.results[0]?.metadata["ref"] ?? "";
 
     logger.info(
-      { articleNum: draftRequest.articleNum },
-      "単一ドラフト生成を開始",
+      { articleNum, retrievedDocs: retrieval.results.length, hasStandardText: standardText.length > 0 },
+      "標準管理規約テキストを取得",
     );
 
     // ドラフト生成
-    const result = await generateDraft(draftRequest);
+    const result = await generateDraft({
+      articleNum,
+      category,
+      currentText,
+      standardText,
+      gapSummary,
+      importance,
+      condoContext,
+    });
 
-    logger.info(
-      { articleNum: result.articleNum },
-      "単一ドラフト生成完了",
-    );
+    logger.info({ articleNum: result.articleNum }, "単一ドラフト生成完了");
 
     return NextResponse.json(result);
   } catch (error) {

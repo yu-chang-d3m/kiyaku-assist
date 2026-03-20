@@ -9,7 +9,6 @@
 import type { ParseResult } from "@/domains/ingestion/types";
 import type { AnalysisResult } from "@/domains/analysis/types";
 import type {
-  DraftRequest,
   DraftResult,
   CondoContext,
   BatchDraftResult,
@@ -213,12 +212,11 @@ export async function getAnalysisResult(
 
 // ========== Drafting ==========
 
-/** ドラフト生成対象の条文データ */
+/** ドラフト生成対象の条文データ（standardText はサーバー側でリトリーバーから取得） */
 export interface DraftItem {
   articleNum: string;
   category: string;
   currentText: string | null;
-  standardText: string;
   gapSummary: string;
   importance: "mandatory" | "recommended" | "optional";
 }
@@ -290,12 +288,22 @@ export function startDrafting(
   return controller;
 }
 
+/** 単一ドラフト生成リクエスト（standardText はサーバー側で取得） */
+export interface SingleDraftRequest {
+  articleNum: string;
+  category: string;
+  currentText: string | null;
+  gapSummary: string;
+  importance: "mandatory" | "recommended" | "optional";
+  condoContext: CondoContext;
+}
+
 /**
  * POST /api/drafting/single
  * 単一条文のドラフトを再生成する
  */
 export async function callDraftSingle(
-  request: DraftRequest,
+  request: SingleDraftRequest,
 ): Promise<DraftResult> {
   const res = await fetch("/api/drafting/single", {
     method: "POST",

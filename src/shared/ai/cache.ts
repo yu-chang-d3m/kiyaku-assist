@@ -6,10 +6,11 @@
  *
  * - キャッシュキーは入力の SHA-256 ハッシュ
  * - TTL（有効期限）付きで Firestore に保存
- * - Firebase 未設定時は何もしない（キャッシュなし動作）
+ * - Firebase Admin SDK を使用（セキュリティルールをバイパス）
  */
 
 import { sha256Hash } from "@/shared/ai/claude";
+import { getAdminDb } from "@/shared/db/admin";
 import { logger } from "@/shared/observability/logger";
 
 // ---------- 型定義 ----------
@@ -32,23 +33,17 @@ interface CacheEntry {
  */
 export async function getCachedResponse(cacheKey: string): Promise<unknown | null> {
   try {
-    // Firebase の動的 import（未設定時のエラーを防ぐ）
-    const { isFirebaseConfigured, getDb } = await import("@/shared/db/firestore");
-    if (!isFirebaseConfigured) return null;
+    const db = getAdminDb();
+    const snapshot = await db.collection("aiCache").doc(cacheKey).get();
 
-    const { doc, getDoc } = await import("firebase/firestore");
-    const db = getDb();
-    const docRef = doc(db, "aiCache", cacheKey);
-    const snapshot = await getDoc(docRef);
-
-    if (!snapshot.exists()) return null;
+    if (!snapshot.exists) return null;
 
     const data = snapshot.data() as CacheEntry;
 
     // 有効期限チェック
     const expiresAt = data.expiresAt instanceof Date
       ? data.expiresAt
-      : new Date((data.expiresAt as unknown as { seconds: number }).seconds * 1000);
+      : new Date((data.expiresAt as unknown as { _seconds: number })._seconds * 1000);
 
     if (expiresAt < new Date()) {
       logger.info({ cacheKey }, "キャッシュ期限切れ");
@@ -76,11 +71,7 @@ export async function setCachedResponse(
   ttlDays: number = 30,
 ): Promise<void> {
   try {
-    const { isFirebaseConfigured, getDb } = await import("@/shared/db/firestore");
-    if (!isFirebaseConfigured) return;
-
-    const { doc, setDoc } = await import("firebase/firestore");
-    const db = getDb();
+    const db = getAdminDb();
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1000);
@@ -92,7 +83,7 @@ export async function setCachedResponse(
       expiresAt,
     };
 
-    await setDoc(doc(db, "aiCache", cacheKey), entry);
+    await db.collection("aiCache").doc(cacheKey).set(entry);
     logger.info({ cacheKey, ttlDays }, "キャッシュに保存");
   } catch (error) {
     logger.warn({ cacheKey, error }, "キャッシュ保存に失敗（無視して続行）");

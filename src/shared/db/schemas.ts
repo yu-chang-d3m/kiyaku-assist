@@ -34,7 +34,7 @@ export const ReviewArticleSchema = z.object({
   chapter: z.number().int().min(0),
   articleNum: z.string().min(1),
   original: z.string().nullable(),
-  draft: z.string().min(1),
+  draft: z.string(),
   summary: z.string(),
   explanation: z.string(),
   importance: z.enum(["mandatory", "recommended", "optional"]),

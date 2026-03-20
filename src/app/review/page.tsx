@@ -124,18 +124,13 @@ export default function ReviewPage() {
     try {
       const pid = loadProjectId() ?? "default";
 
-      // まず Firestore からレビュー記事を取得
+      // Firestore からレビュー記事を取得
       let fetched: ReviewArticle[] = [];
-      try {
-        const result = await getReviewArticles(pid);
-        fetched = result.articles ?? [];
-      } catch (fetchErr) {
-        // Firestore 取得失敗（権限不足含む）→ フォールバック
-        console.warn("Firestore からの取得に失敗、ローカルデータを使用:", fetchErr);
-      }
+      const result = await getReviewArticles(pid);
+      fetched = result.articles ?? [];
 
-      // Firestore にデータがない場合、sessionStorage のギャップ分析結果から生成
-      if (!fetched || fetched.length === 0) {
+      // Firestore にデータがない場合、sessionStorage のギャップ分析結果からフォールバック
+      if (fetched.length === 0) {
         const gapResults = loadGapResults();
         if (gapResults && gapResults.length > 0) {
           fetched = gapItemsToReviewArticles(gapResults, pid);

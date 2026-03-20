@@ -13,6 +13,7 @@ import { NextRequest } from "next/server";
 import * as z from "zod/v4";
 import { batchRetrieve } from "@/domains/analysis/retriever";
 import { analyzeGaps } from "@/domains/analysis/analyzer";
+import { batchSaveReviewArticles } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
 
 /** リクエストボディのバリデーションスキーマ */
@@ -109,6 +110,36 @@ export async function POST(request: NextRequest) {
           { projectId, analyzedCount: analysisResult.items.length },
           "ギャップ分析が完了",
         );
+
+        // Phase 3: 分析結果を Firestore に ReviewArticle として保存
+        try {
+          const reviewArticles = analysisResult.items.map((item) => ({
+            projectId,
+            chapter: 0,
+            articleNum: item.articleNum,
+            original: item.currentText ?? null,
+            draft: "",
+            summary: item.gapSummary,
+            explanation: item.rationale,
+            importance: item.importance,
+            baseRef: item.standardRef,
+            decision: null as "adopted" | "modified" | "pending" | null,
+            modificationHistory: [] as string[],
+            memo: "",
+            category: item.category,
+          }));
+
+          await batchSaveReviewArticles(projectId, reviewArticles);
+          logger.info(
+            { projectId, savedCount: reviewArticles.length },
+            "分析結果を Firestore に保存完了",
+          );
+        } catch (saveError) {
+          logger.error(
+            { projectId, error: saveError },
+            "分析結果の Firestore 保存に失敗（結果は SSE で返却済み）",
+          );
+        }
 
         send("complete", analysisResult);
       } catch (error) {

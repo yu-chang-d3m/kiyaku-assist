@@ -27,7 +27,7 @@ const draftItemSchema = z.object({
   articleNum: z.string().min(1, "条番号は必須です"),
   category: z.string().min(1, "カテゴリは必須です"),
   currentText: z.string().nullable(),
-  standardText: z.string().min(1, "標準管理規約テキストは必須です"),
+  standardText: z.string().default(""),
   gapSummary: z.string().min(1, "ギャップ概要は必須です"),
   importance: z.enum(["mandatory", "recommended", "optional"]),
 });

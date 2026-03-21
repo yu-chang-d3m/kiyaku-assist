@@ -463,10 +463,36 @@ export default function ReviewPage() {
         )}
 
         {/* 次のステップへ CTA */}
-        {allDone && (
-          <div className="text-center">
-            <Button asChild size="lg" className="min-h-[44px]"><Link href="/export">次のステップへ</Link></Button>
-          </div>
+        {articles.length > 0 && (
+          <Card className="bg-muted/50">
+            <CardContent className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6">
+              <div>
+                {allDone ? (
+                  <p className="font-medium text-green-700">全 {articles.length} 件の判断が完了しました</p>
+                ) : (
+                  <>
+                    <p className="font-medium">
+                      {decided} / {articles.length} 件の判断が完了（残り {articles.length - decided} 件）
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      未決定の項目がある場合でもエクスポートできます。
+                      「AI推奨を全て承認」で残りを一括設定することもできます。
+                    </p>
+                  </>
+                )}
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                {!allDone && (
+                  <Button variant="outline" size="lg" className="min-h-[44px]" onClick={handleApproveAllAi}>
+                    AI推奨を全て承認
+                  </Button>
+                )}
+                <Button asChild size="lg" className="min-h-[44px]">
+                  <Link href="/export">エクスポートへ</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </main>
       <AppFooter />

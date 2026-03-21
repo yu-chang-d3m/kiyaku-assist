@@ -225,21 +225,43 @@ export async function batchGenerateDrafts(
  */
 export { generateDraft };
 
+// ---------- タイムアウトラッパー ----------
+
+/** 指定時間でタイムアウトするラッパー */
+async function generateDraftWithTimeout(
+  request: DraftRequest,
+  timeoutMs: number = 120_000,
+): Promise<DraftResult> {
+  return new Promise<DraftResult>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`タイムアウト: ${request.articleNum} の生成が ${timeoutMs / 1000}秒を超えました`));
+    }, timeoutMs);
+
+    generateDraft(request)
+      .then((result) => { clearTimeout(timer); resolve(result); })
+      .catch((err) => { clearTimeout(timer); reject(err); });
+  });
+}
+
+/** レート制限回避のため、バッチ間に短い待機を入れる */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // ---------- 重要度別バッチ戦略 ----------
 
 /**
  * 重要度別バッチ戦略でドラフトを生成する
  *
- * smart モード: 重要度に応じてバッチサイズと並列数を調整
- *   - mandatory: 1件ずつ、3並列
- *   - recommended: 3件バッチ、2並列（※バッチ = 並列実行の単位数）
- *   - optional: 5件バッチ、3並列
+ * smart モード: 重要度に応じて並列数を調整
+ *   - mandatory: 2並列
+ *   - recommended: 2並列
+ *   - optional: 2並列
  *
- * precise モード: 全件を1件ずつ、2並列
+ * precise モード: 全件を1件ずつ（直列）
  *
- * 注意: ここでの「バッチ」は Claude API のバッチ呼び出しではなく、
- * 並列実行する単位数を意味する。各条文は必ず1回の API 呼び出しで処理し、
- * 正確性を担保する。
+ * 各条文は必ず1回の API 呼び出しで処理し、正確性を担保する。
+ * バッチ間に500msの待機を入れてレート制限を回避する。
  */
 export async function generateDraftsWithStrategy(
   requests: DraftRequest[],
@@ -252,12 +274,46 @@ export async function generateDraftsWithStrategy(
   const total = requests.length;
 
   if (mode === "precise") {
-    // 精密モード: 全件を1件ずつ、2並列
+    // 精密モード: 1件ずつ直列処理（レート制限回避）
+    for (let i = 0; i < requests.length; i++) {
+      const req = requests[i];
+      completed++;
+      try {
+        const result = await generateDraftWithTimeout(req);
+        allDrafts.push(result);
+        onProgress?.(completed, total, req.articleNum, "generation");
+      } catch (err) {
+        logger.warn({ articleNum: req.articleNum, error: err }, "ドラフト生成失敗、リトライ中");
+        // 1回リトライ（2秒待機後）
+        await sleep(2000);
+        try {
+          const retryResult = await generateDraftWithTimeout(req);
+          allDrafts.push(retryResult);
+          onProgress?.(completed, total, req.articleNum, "retry");
+        } catch (retryErr) {
+          allFailures.push({
+            articleNum: req.articleNum,
+            error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+          });
+          onProgress?.(completed, total, req.articleNum, "retry");
+        }
+      }
+      // バッチ間の待機（レート制限回避）
+      if (i < requests.length - 1) await sleep(500);
+    }
+  } else {
+    // smart モード: 2並列、重要度の高い順にソート
+    const sorted = [...requests].sort((a, b) => {
+      const order: Record<string, number> = { mandatory: 0, recommended: 1, optional: 2 };
+      return (order[a.importance] ?? 2) - (order[b.importance] ?? 2);
+    });
+
     const concurrency = 2;
-    for (let i = 0; i < requests.length; i += concurrency) {
-      const batch = requests.slice(i, i + concurrency);
+
+    for (let i = 0; i < sorted.length; i += concurrency) {
+      const batch = sorted.slice(i, i + concurrency);
       const results = await Promise.allSettled(
-        batch.map((req) => generateDraft(req)),
+        batch.map((req) => generateDraftWithTimeout(req)),
       );
 
       for (let j = 0; j < results.length; j++) {
@@ -267,76 +323,22 @@ export async function generateDraftsWithStrategy(
           allDrafts.push(result.value);
           onProgress?.(completed, total, batch[j].articleNum, "generation");
         } else {
-          // 精密モードでも失敗時は1回リトライ
-          try {
-            const retryResult = await generateDraft(batch[j]);
-            allDrafts.push(retryResult);
-            onProgress?.(completed, total, batch[j].articleNum, "retry");
-          } catch {
-            allFailures.push({
-              articleNum: batch[j].articleNum,
-              error:
-                result.reason instanceof Error
-                  ? result.reason.message
-                  : String(result.reason),
-            });
-            onProgress?.(completed, total, batch[j].articleNum, "retry");
-          }
+          allFailures.push({
+            articleNum: batch[j].articleNum,
+            error:
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason),
+          });
+          onProgress?.(completed, total, batch[j].articleNum, "generation");
         }
       }
-    }
-  } else {
-    // smart モード: 重要度別に並列数を変える
-    const groups = {
-      mandatory: requests.filter((r) => r.importance === "mandatory"),
-      recommended: requests.filter((r) => r.importance === "recommended"),
-      optional: requests.filter((r) => r.importance === "optional"),
-    };
 
-    const concurrencyMap = { mandatory: 3, recommended: 2, optional: 3 };
-
-    // 重要度の高い順に処理（mandatory → recommended → optional）
-    for (const [importance, group] of Object.entries(groups) as [
-      string,
-      DraftRequest[],
-    ][]) {
-      if (group.length === 0) continue;
-
-      const concurrency =
-        concurrencyMap[importance as keyof typeof concurrencyMap] ?? 3;
-
-      logger.info(
-        { importance, count: group.length, concurrency },
-        "重要度グループのドラフト生成を開始",
-      );
-
-      for (let i = 0; i < group.length; i += concurrency) {
-        const batch = group.slice(i, i + concurrency);
-        const results = await Promise.allSettled(
-          batch.map((req) => generateDraft(req)),
-        );
-
-        for (let j = 0; j < results.length; j++) {
-          completed++;
-          const result = results[j];
-          if (result.status === "fulfilled") {
-            allDrafts.push(result.value);
-            onProgress?.(completed, total, batch[j].articleNum, "generation");
-          } else {
-            allFailures.push({
-              articleNum: batch[j].articleNum,
-              error:
-                result.reason instanceof Error
-                  ? result.reason.message
-                  : String(result.reason),
-            });
-            onProgress?.(completed, total, batch[j].articleNum, "generation");
-          }
-        }
-      }
+      // バッチ間の待機（レート制限回避）
+      if (i + concurrency < sorted.length) await sleep(800);
     }
 
-    // 失敗した条文を1件ずつリトライ（最大1回）
+    // 失敗した条文を1件ずつリトライ（最大1回、3秒間隔）
     if (allFailures.length > 0) {
       logger.info(
         { failureCount: allFailures.length },
@@ -344,7 +346,6 @@ export async function generateDraftsWithStrategy(
       );
 
       const retryTargets = [...allFailures];
-      // allFailures をクリアしてリトライ
       allFailures.length = 0;
 
       for (const failure of retryTargets) {
@@ -356,8 +357,10 @@ export async function generateDraftsWithStrategy(
           continue;
         }
 
+        await sleep(3000); // レート制限回避のため3秒待機
+
         try {
-          const retryResult = await generateDraft(originalReq);
+          const retryResult = await generateDraftWithTimeout(originalReq);
           allDrafts.push(retryResult);
           onProgress?.(completed, total, failure.articleNum, "retry");
           logger.info({ articleNum: failure.articleNum }, "リトライ成功");

@@ -98,7 +98,7 @@ export async function callWithStructuredOutput<T>(
       messages: [{ role: "user", content: params.userMessage }],
       tools: [params.tool],
       tool_choice: { type: "tool", name: params.tool.name },
-    });
+    }, { timeout: 90_000 }); // 90秒タイムアウト
   });
 
   // tool_use ブロックから入力を抽出
@@ -178,12 +178,16 @@ function isRetryableError(error: unknown): boolean {
   if (error instanceof Anthropic.RateLimitError) return true;
   if (error instanceof Anthropic.InternalServerError) return true;
   if (error instanceof Anthropic.APIConnectionError) return true;
+  if (error instanceof Anthropic.APIConnectionTimeoutError) return true;
 
-  // HTTP ステータスコードでの判定（SDK のエラー型以外の場合）
+  // overloaded エラー（529）
   if (error && typeof error === "object" && "status" in error) {
     const status = (error as { status: number }).status;
-    return status === 429 || status >= 500;
+    return status === 429 || status === 529 || status >= 500;
   }
+
+  // タイムアウト系エラー
+  if (error instanceof Error && error.message.includes("timeout")) return true;
 
   return false;
 }

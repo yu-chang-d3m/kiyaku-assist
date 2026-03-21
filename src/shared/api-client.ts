@@ -583,6 +583,22 @@ export async function getProject(id: string): Promise<Project> {
 }
 
 /**
+ * DELETE /api/project/[id]
+ * プロジェクトとその関連データを削除する
+ */
+export async function deleteProjectApi(id: string): Promise<void> {
+  const res = await fetch(`/api/project/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      (err as { error?: string }).error ?? "プロジェクトの削除に失敗しました",
+    );
+  }
+}
+
+/**
  * PATCH /api/project/[id]
  * プロジェクトを部分更新する
  */

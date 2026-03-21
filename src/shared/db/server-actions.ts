@@ -95,6 +95,33 @@ export async function listProjects(
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Project) }));
 }
 
+/**
+ * プロジェクトとそのサブコレクション（reviewArticles）を削除する
+ */
+export async function deleteProject(projectId: string): Promise<void> {
+  const db = getAdminDb();
+  const BATCH_LIMIT = 500;
+
+  // サブコレクション（reviewArticles）を先に削除
+  const reviewSnap = await db
+    .collection("projects")
+    .doc(projectId)
+    .collection("reviewArticles")
+    .get();
+
+  for (let i = 0; i < reviewSnap.docs.length; i += BATCH_LIMIT) {
+    const chunk = reviewSnap.docs.slice(i, i + BATCH_LIMIT);
+    const batch = db.batch();
+    for (const doc of chunk) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+  }
+
+  // プロジェクトドキュメント本体を削除
+  await db.collection("projects").doc(projectId).delete();
+}
+
 // ---------- レビュー記事 CRUD ----------
 
 /**

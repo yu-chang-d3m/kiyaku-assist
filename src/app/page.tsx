@@ -2,13 +2,11 @@
  * ホームページ（ランディング）
  *
  * - ヒーローセクション: キャッチコピー、サブテキスト、「始める」ボタン
+ * - プロジェクト一覧（ログイン済みの場合）
  * - 6 ステップの紹介カード（JOURNEY_STEPS から動的生成）
  * - 特徴セクション（コスト・所要時間・対応規約）
  * - 改正区分所有法対応バナー
  * - レスポンシブデザイン（grid）
- *
- * "use client" は不要 — 状態やイベントハンドラを使わない Server Component。
- * AppHeader / AppFooter は Client Component だが、Server Component 内でインポート可能。
  */
 
 import Link from "next/link";
@@ -17,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
+import { ProjectList } from "@/components/project-list";
 import { JOURNEY_STEPS } from "@/shared/journey";
 
 export default function Home() {
@@ -53,6 +52,9 @@ export default function Home() {
             <Link href="/onboarding">無料で始める</Link>
           </Button>
         </section>
+
+        {/* プロジェクト一覧（ログイン済みの場合のみ表示） */}
+        <ProjectList />
 
         {/* ステップ紹介 */}
         <section className="bg-muted/50 py-12">

@@ -13,6 +13,8 @@ import type {
   DraftResult,
   BatchDraftResult,
   DraftFailure,
+  DraftGenerationMode,
+  DraftProgressCallback,
 } from "@/domains/drafting/types";
 
 // ---------- tool_use スキーマ ----------
@@ -222,3 +224,163 @@ export async function batchGenerateDrafts(
  * 単一条文のドラフトを生成する（公開用ラッパー）
  */
 export { generateDraft };
+
+// ---------- 重要度別バッチ戦略 ----------
+
+/**
+ * 重要度別バッチ戦略でドラフトを生成する
+ *
+ * smart モード: 重要度に応じてバッチサイズと並列数を調整
+ *   - mandatory: 1件ずつ、3並列
+ *   - recommended: 3件バッチ、2並列（※バッチ = 並列実行の単位数）
+ *   - optional: 5件バッチ、3並列
+ *
+ * precise モード: 全件を1件ずつ、2並列
+ *
+ * 注意: ここでの「バッチ」は Claude API のバッチ呼び出しではなく、
+ * 並列実行する単位数を意味する。各条文は必ず1回の API 呼び出しで処理し、
+ * 正確性を担保する。
+ */
+export async function generateDraftsWithStrategy(
+  requests: DraftRequest[],
+  mode: DraftGenerationMode,
+  onProgress?: DraftProgressCallback,
+): Promise<BatchDraftResult> {
+  const allDrafts: DraftResult[] = [];
+  const allFailures: DraftFailure[] = [];
+  let completed = 0;
+  const total = requests.length;
+
+  if (mode === "precise") {
+    // 精密モード: 全件を1件ずつ、2並列
+    const concurrency = 2;
+    for (let i = 0; i < requests.length; i += concurrency) {
+      const batch = requests.slice(i, i + concurrency);
+      const results = await Promise.allSettled(
+        batch.map((req) => generateDraft(req)),
+      );
+
+      for (let j = 0; j < results.length; j++) {
+        completed++;
+        const result = results[j];
+        if (result.status === "fulfilled") {
+          allDrafts.push(result.value);
+          onProgress?.(completed, total, batch[j].articleNum, "generation");
+        } else {
+          // 精密モードでも失敗時は1回リトライ
+          try {
+            const retryResult = await generateDraft(batch[j]);
+            allDrafts.push(retryResult);
+            onProgress?.(completed, total, batch[j].articleNum, "retry");
+          } catch {
+            allFailures.push({
+              articleNum: batch[j].articleNum,
+              error:
+                result.reason instanceof Error
+                  ? result.reason.message
+                  : String(result.reason),
+            });
+            onProgress?.(completed, total, batch[j].articleNum, "retry");
+          }
+        }
+      }
+    }
+  } else {
+    // smart モード: 重要度別に並列数を変える
+    const groups = {
+      mandatory: requests.filter((r) => r.importance === "mandatory"),
+      recommended: requests.filter((r) => r.importance === "recommended"),
+      optional: requests.filter((r) => r.importance === "optional"),
+    };
+
+    const concurrencyMap = { mandatory: 3, recommended: 2, optional: 3 };
+
+    // 重要度の高い順に処理（mandatory → recommended → optional）
+    for (const [importance, group] of Object.entries(groups) as [
+      string,
+      DraftRequest[],
+    ][]) {
+      if (group.length === 0) continue;
+
+      const concurrency =
+        concurrencyMap[importance as keyof typeof concurrencyMap] ?? 3;
+
+      logger.info(
+        { importance, count: group.length, concurrency },
+        "重要度グループのドラフト生成を開始",
+      );
+
+      for (let i = 0; i < group.length; i += concurrency) {
+        const batch = group.slice(i, i + concurrency);
+        const results = await Promise.allSettled(
+          batch.map((req) => generateDraft(req)),
+        );
+
+        for (let j = 0; j < results.length; j++) {
+          completed++;
+          const result = results[j];
+          if (result.status === "fulfilled") {
+            allDrafts.push(result.value);
+            onProgress?.(completed, total, batch[j].articleNum, "generation");
+          } else {
+            allFailures.push({
+              articleNum: batch[j].articleNum,
+              error:
+                result.reason instanceof Error
+                  ? result.reason.message
+                  : String(result.reason),
+            });
+            onProgress?.(completed, total, batch[j].articleNum, "generation");
+          }
+        }
+      }
+    }
+
+    // 失敗した条文を1件ずつリトライ（最大1回）
+    if (allFailures.length > 0) {
+      logger.info(
+        { failureCount: allFailures.length },
+        "失敗条文のリトライを開始",
+      );
+
+      const retryTargets = [...allFailures];
+      // allFailures をクリアしてリトライ
+      allFailures.length = 0;
+
+      for (const failure of retryTargets) {
+        const originalReq = requests.find(
+          (r) => r.articleNum === failure.articleNum,
+        );
+        if (!originalReq) {
+          allFailures.push(failure);
+          continue;
+        }
+
+        try {
+          const retryResult = await generateDraft(originalReq);
+          allDrafts.push(retryResult);
+          onProgress?.(completed, total, failure.articleNum, "retry");
+          logger.info({ articleNum: failure.articleNum }, "リトライ成功");
+        } catch (retryError) {
+          allFailures.push({
+            articleNum: failure.articleNum,
+            error:
+              retryError instanceof Error
+                ? retryError.message
+                : String(retryError),
+          });
+          logger.error(
+            { articleNum: failure.articleNum, error: retryError },
+            "リトライも失敗",
+          );
+        }
+      }
+    }
+  }
+
+  return {
+    drafts: allDrafts,
+    failures: allFailures,
+    generatedAt: new Date().toISOString(),
+  };
+}

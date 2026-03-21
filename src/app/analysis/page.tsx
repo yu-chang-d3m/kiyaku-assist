@@ -23,12 +23,13 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
-import { startAnalysis } from "@/shared/api-client";
+import { startAnalysis, startAutoGenerate } from "@/shared/api-client";
 import {
   loadParsedBylaws,
   saveGapResults,
   loadGapResults,
   loadProjectId,
+  loadOnboarding,
 } from "@/shared/store";
 import { cn } from "@/lib/utils";
 import type { GapAnalysisItem, GapType, AnalysisResult } from "@/domains/analysis/types";
@@ -73,7 +74,7 @@ type FilterStatus = GapType | "all";
 
 // ---------- 分析フェーズ ----------
 
-type AnalysisPhase = "loading" | "ready" | "analyzing" | "done" | "error";
+type AnalysisPhase = "loading" | "ready" | "analyzing" | "drafting" | "done" | "error";
 
 // ---------- コンポーネント ----------
 
@@ -85,7 +86,11 @@ export default function AnalysisPage() {
   const [progressMsg, setProgressMsg] = useState("");
   const [progressPercent, setProgressPercent] = useState(0);
   const [errorMsg, setErrorMsg] = useState("");
+  const [draftProgressMsg, setDraftProgressMsg] = useState("");
+  const [draftProgressPercent, setDraftProgressPercent] = useState(0);
+  const [draftMode, setDraftMode] = useState<"smart" | "precise">("smart");
   const controllerRef = useRef<AbortController | null>(null);
+  const draftControllerRef = useRef<AbortController | null>(null);
 
   /** パース済みデータの存在チェック + キャッシュ済み結果の読み込み */
   useEffect(() => {
@@ -138,7 +143,8 @@ export default function AnalysisPage() {
       onComplete: (data: AnalysisResult) => {
         setResults(data.items);
         saveGapResults(data.items);
-        setPhase("done");
+        // 分析完了 → 自動ドラフト生成フェーズへ
+        handleStartDrafting(projectId);
       },
       onError: (message) => {
         setErrorMsg(message);
@@ -149,10 +155,48 @@ export default function AnalysisPage() {
     controllerRef.current = controller;
   }, [router]);
 
+  /** 自動ドラフト生成を開始する */
+  const handleStartDrafting = useCallback((pid: string) => {
+    setPhase("drafting");
+    setDraftProgressMsg("ドラフト生成を準備中...");
+    setDraftProgressPercent(0);
+
+    // オンボーディングデータからマンション属性を取得
+    const onboarding = loadOnboarding();
+    const condoContext = {
+      condoName: onboarding?.condoName ?? "マンション",
+      condoType: (onboarding?.condoType ?? "unknown") as "corporate" | "non-corporate" | "unknown",
+      unitCount: (onboarding?.unitCount ?? "medium") as "small" | "medium" | "large" | "xlarge",
+    };
+
+    const controller = startAutoGenerate(pid, draftMode, condoContext, {
+      onProgress: (data) => {
+        const phaseLabel = data.phase === "retrieval" ? "検索" : data.phase === "retry" ? "リトライ" : "生成";
+        setDraftProgressMsg(
+          `${data.articleNum}（${phaseLabel}中）... (${data.current}/${data.total})`,
+        );
+        if (data.total > 0) {
+          setDraftProgressPercent(Math.round((data.current / data.total) * 100));
+        }
+      },
+      onComplete: () => {
+        setPhase("done");
+      },
+      onError: (message) => {
+        // ドラフト生成のエラーはワーニングにとどめ、分析結果は残す
+        console.error("自動ドラフト生成エラー:", message);
+        setPhase("done");
+      },
+    });
+
+    draftControllerRef.current = controller;
+  }, [draftMode]);
+
   /** クリーンアップ: コンポーネント破棄時に SSE を中断 */
   useEffect(() => {
     return () => {
       controllerRef.current?.abort();
+      draftControllerRef.current?.abort();
     };
   }, []);
 
@@ -225,7 +269,19 @@ export default function AnalysisPage() {
               <h3 className="text-lg font-semibold">ギャップ分析の準備完了</h3>
               <p className="text-sm text-muted-foreground">
                 パース済みの条文データをAIが標準管理規約と比較し、差分を分析します。
+                分析後、自動的に改正案のドラフトも生成します。
               </p>
+              <div className="flex items-center gap-3 justify-center mt-3">
+                <label className="text-xs text-muted-foreground">生成モード:</label>
+                <select
+                  value={draftMode}
+                  onChange={(e) => setDraftMode(e.target.value as "smart" | "precise")}
+                  className="text-sm border rounded px-2 py-1"
+                >
+                  <option value="smart">スマート（高速・推奨）</option>
+                  <option value="precise">精密（正確・時間がかかります）</option>
+                </select>
+              </div>
               <Button onClick={handleStartAnalysis} size="lg" className="mt-4">
                 分析を開始
               </Button>
@@ -274,6 +330,54 @@ export default function AnalysisPage() {
               <Progress value={progressPercent} className="h-2" />
               <p className="text-xs text-muted-foreground">
                 複数条文をまとめてAIが分析します。しばらくお待ちください。
+              </p>
+            </CardContent>
+          </Card>
+        </main>
+        <AppFooter />
+      </div>
+    );
+  }
+
+  if (phase === "drafting") {
+    return (
+      <div className="flex flex-col min-h-screen">
+        <AppHeader currentStep="analysis" />
+        <main className="flex-1 flex items-center justify-center px-4 py-8">
+          <Card className="max-w-md w-full">
+            <CardContent className="py-8 text-center space-y-4">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 animate-pulse">
+                <svg
+                  className="w-6 h-6 text-primary animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-1">
+                  改正案ドラフトを自動生成中
+                </h3>
+                <p className="text-sm text-muted-foreground">{draftProgressMsg}</p>
+              </div>
+              <Progress value={draftProgressPercent} className="h-2" />
+              <p className="text-xs text-muted-foreground">
+                分析結果に基づいてAIが改正案のドラフトを生成しています。
+                <br />
+                完了後、レビュー画面に進めます。
               </p>
             </CardContent>
           </Card>
@@ -467,7 +571,7 @@ export default function AnalysisPage() {
                 件の改正が必要です
               </p>
               <p className="text-sm text-muted-foreground">
-                次のステップでAIが改正案のドラフトを生成します。1条文ずつ確認・判断できます。
+                AIが改正案のドラフトを生成済みです。レビュー画面で確認・判断できます。
               </p>
             </div>
             <Button size="lg" asChild>

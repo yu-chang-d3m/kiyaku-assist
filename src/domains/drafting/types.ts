@@ -67,3 +67,14 @@ export interface DraftFailure {
   /** エラー内容 */
   error: string;
 }
+
+/** 生成モード: smart = 重要度別最適化, precise = 1件ずつ丁寧に */
+export type DraftGenerationMode = "smart" | "precise";
+
+/** ドラフト生成進捗コールバック */
+export type DraftProgressCallback = (
+  completedCount: number,
+  totalCount: number,
+  articleNum: string,
+  phase: "retrieval" | "generation" | "retry",
+) => void;

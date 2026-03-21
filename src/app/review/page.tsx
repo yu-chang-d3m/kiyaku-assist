@@ -1,20 +1,8 @@
 "use client";
-
 /**
- * 条文レビュー画面
- *
- * ギャップ分析の結果をもとに、各条文を1件ずつカード形式で表示し、
- * ユーザーが「採用 / 修正 / 保留」を判断する。
- *
- * v1 からの改善点:
- * - API クライアント経由でデータ取得（api-client.ts）
- * - StepId が文字列ベース（"review"）
- * - Zustand ストア（@/shared/store）で永続化
- * - フィルター機能（全て / 未決定 / 採用 / 修正 / 保留）
- * - 編集可能な AI ドラフトテキストエリア
+ * 条文レビュー画面（テーブルビュー + 一括操作 + AI推奨判断）
  */
-
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -23,322 +11,244 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/shared/auth/auth-context";
 import type { StepId } from "@/shared/journey";
-import {
-  getReviewArticles,
-  patchReviewArticle,
-  decideReview,
-  callDraftSingle,
-} from "@/shared/api-client";
+import { getReviewArticles, patchReviewArticle, decideReview, callDraftSingle } from "@/shared/api-client";
 import type { ReviewArticle } from "@/shared/db/types";
 import type { GapAnalysisItem } from "@/domains/analysis/types";
-import {
-  useProjectStore,
-  loadProjectId,
-  loadGapResults,
-  saveReviewDecisions,
-  loadReviewDecisions,
-  saveReviewMemos,
-  loadReviewMemos,
-} from "@/shared/store";
+import { useProjectStore, loadProjectId, loadGapResults, saveReviewDecisions, loadReviewDecisions, saveReviewMemos, loadReviewMemos } from "@/shared/store";
 
-// ---------- 定数 ----------
+// ---------- 定数・ユーティリティ ----------
+const IMPORTANCE_LABEL: Record<string, string> = { mandatory: "法的必須", recommended: "推奨", optional: "任意" };
+const IMPORTANCE_STYLE: Record<string, string> = { mandatory: "bg-red-500 text-white", recommended: "bg-blue-500 text-white", optional: "bg-gray-400 text-white" };
+const IMPORTANCE_ORDER: Record<string, number> = { mandatory: 0, recommended: 1, optional: 2 };
 
-/** 重要度ラベル */
-const IMPORTANCE_LABEL: Record<string, string> = {
-  mandatory: "法的必須",
-  recommended: "推奨",
-  optional: "任意",
-};
-
-/** 重要度スタイル */
-const IMPORTANCE_STYLE: Record<string, string> = {
-  mandatory: "bg-red-500 text-white",
-  recommended: "bg-blue-500 text-white",
-  optional: "bg-gray-400 text-white",
-};
-
-/** 判断の型 */
 type Decision = "adopted" | "modified" | "pending";
-
-/** フィルターの選択肢 */
 type FilterType = "all" | "undecided" | "adopted" | "modified" | "pending";
+type ImportanceFilter = "all" | "mandatory" | "recommended" | "optional";
 
 const FILTER_OPTIONS: { value: FilterType; label: string }[] = [
-  { value: "all", label: "全て" },
-  { value: "undecided", label: "未決定" },
-  { value: "adopted", label: "採用" },
-  { value: "modified", label: "修正" },
-  { value: "pending", label: "保留" },
+  { value: "all", label: "全て" }, { value: "undecided", label: "未決定" },
+  { value: "adopted", label: "採用" }, { value: "modified", label: "修正" }, { value: "pending", label: "保留" },
+];
+const IMPORTANCE_FILTER_OPTIONS: { value: ImportanceFilter; label: string }[] = [
+  { value: "all", label: "全重要度" }, { value: "mandatory", label: "法的必須" },
+  { value: "recommended", label: "推奨" }, { value: "optional", label: "任意" },
 ];
 
-// ---------- コンポーネント ----------
+/** AI推奨を取得（フィールドがなければ importance から推定） */
+function getAiRec(a: ReviewArticle): Decision {
+  if (a.aiRecommendation) return a.aiRecommendation;
+  return a.importance === "optional" ? "pending" : "adopted";
+}
+function aiRecIcon(rec: Decision): string {
+  return rec === "adopted" ? "\u2713" : rec === "modified" ? "\u25B3" : "\u2212";
+}
+function extractNum(s: string): number {
+  const m = s.match(/(\d+)/);
+  return m ? parseInt(m[1], 10) : 9999;
+}
+/** ReviewEvent を構築 */
+function buildEvent(decision: Decision, draft?: string) {
+  return {
+    type: decision === "adopted" ? "ADOPT" : decision === "modified" ? "MODIFY" as const : "RESET" as const,
+    ...(decision === "modified" ? { newText: draft ?? "", reason: "レビュー画面で修正" } : {}),
+  } as import("@/domains/review/types").ReviewEvent;
+}
 
+// スピナー SVG（再利用）
+const Spinner = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={`${className} animate-spin`} fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+  </svg>
+);
+
+// ---------- メインコンポーネント ----------
 export default function ReviewPage() {
   const router = useRouter();
   const { user } = useAuth();
 
-  // 状態管理
   const [articles, setArticles] = useState<ReviewArticle[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [decisions, setDecisions] = useState<Record<string, string>>({});
   const [memos, setMemos] = useState<Record<string, string>>({});
   const [editedDrafts, setEditedDrafts] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<FilterType>("all");
+  const [importanceFilter, setImportanceFilter] = useState<ImportanceFilter>("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [showCurrentText, setShowCurrentText] = useState(false);
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [draftLoading, setDraftLoading] = useState<Record<string, boolean>>({});
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
-
   const initDone = useRef(false);
 
   // ---------- 初期化 ----------
-
-  /** GapAnalysisItem → ReviewArticle に変換する */
-  const gapItemsToReviewArticles = useCallback(
-    (items: GapAnalysisItem[], pid: string): ReviewArticle[] => {
-      return items.map((item, index) => ({
-        id: item.articleNum,
-        projectId: pid,
-        chapter: 0,
-        articleNum: item.articleNum,
-        original: item.currentText,
-        draft: "",
-        summary: item.gapSummary,
-        explanation: item.rationale,
-        importance: item.importance,
-        baseRef: item.standardRef,
-        decision: null,
-        modificationHistory: [],
-        memo: "",
-        category: item.category,
-      }));
-    },
+  const gapToReview = useCallback(
+    (items: GapAnalysisItem[], pid: string): ReviewArticle[] =>
+      items.map((item) => ({
+        id: item.articleNum, projectId: pid, chapter: 0, articleNum: item.articleNum,
+        original: item.currentText, draft: "", summary: item.gapSummary, explanation: item.rationale,
+        importance: item.importance, baseRef: item.standardRef, decision: null,
+        modificationHistory: [], memo: "", category: item.category,
+      })),
     [],
   );
 
   const initialize = useCallback(async () => {
     try {
       const pid = loadProjectId() ?? "default";
-
-      // Firestore からレビュー記事を取得
-      let fetched: ReviewArticle[] = [];
-      const result = await getReviewArticles(pid);
-      fetched = result.articles ?? [];
-
-      // Firestore にデータがない場合、sessionStorage のギャップ分析結果からフォールバック
+      let fetched: ReviewArticle[] = (await getReviewArticles(pid)).articles ?? [];
       if (fetched.length === 0) {
-        const gapResults = loadGapResults();
-        if (gapResults && gapResults.length > 0) {
-          fetched = gapItemsToReviewArticles(gapResults, pid);
-        } else {
-          router.push("/analysis");
-          return;
-        }
+        const gap = loadGapResults();
+        if (gap && gap.length > 0) fetched = gapToReview(gap, pid);
+        else { router.push("/analysis"); return; }
       }
-
       setArticles(fetched);
-
-      // ストアから判断・メモを復元
-      const savedDecisions = loadReviewDecisions();
-      if (savedDecisions && Object.keys(savedDecisions).length > 0) {
-        setDecisions(savedDecisions);
-      } else {
-        const initialDecisions: Record<string, string> = {};
-        for (const a of fetched) {
-          if (a.id && a.decision) {
-            initialDecisions[a.id] = a.decision;
-          }
-        }
-        setDecisions(initialDecisions);
+      const sd = loadReviewDecisions();
+      if (sd && Object.keys(sd).length > 0) { setDecisions(sd); }
+      else {
+        const init: Record<string, string> = {};
+        for (const a of fetched) if (a.id && a.decision) init[a.id] = a.decision;
+        setDecisions(init);
       }
-
-      const savedMemos = loadReviewMemos();
-      if (savedMemos && Object.keys(savedMemos).length > 0) {
-        setMemos(savedMemos);
-      } else {
-        const initialMemos: Record<string, string> = {};
-        for (const a of fetched) {
-          if (a.id && a.memo) {
-            initialMemos[a.id] = a.memo;
-          }
-        }
-        setMemos(initialMemos);
+      const sm = loadReviewMemos();
+      if (sm && Object.keys(sm).length > 0) { setMemos(sm); }
+      else {
+        const init: Record<string, string> = {};
+        for (const a of fetched) if (a.id && a.memo) init[a.id] = a.memo;
+        setMemos(init);
       }
-
       setPhase("ready");
     } catch (err) {
       console.error("レビューデータの読み込みに失敗:", err);
-      setErrorMessage(
-        err instanceof Error ? err.message : "データの読み込みに失敗しました"
-      );
+      setErrorMessage(err instanceof Error ? err.message : "データの読み込みに失敗しました");
       setPhase("error");
     }
-  }, [router, gapItemsToReviewArticles]);
+  }, [router, gapToReview]);
 
-  useEffect(() => {
-    if (initDone.current) return;
-    initDone.current = true;
-    initialize();
-  }, [initialize]);
+  useEffect(() => { if (initDone.current) return; initDone.current = true; initialize(); }, [initialize]);
 
-  // ---------- フィルタリング ----------
+  // ---------- ソート・フィルタリング ----------
+  const sortedArticles = useMemo(() =>
+    [...articles].sort((a, b) => {
+      const d = (IMPORTANCE_ORDER[a.importance] ?? 2) - (IMPORTANCE_ORDER[b.importance] ?? 2);
+      return d !== 0 ? d : extractNum(a.articleNum) - extractNum(b.articleNum);
+    }), [articles]);
 
-  const filteredArticles = articles.filter((a) => {
-    const aid = a.id ?? "";
-    if (filter === "all") return true;
-    if (filter === "undecided") return !decisions[aid];
-    return decisions[aid] === filter;
-  });
+  const filteredArticles = useMemo(() =>
+    sortedArticles.filter((a) => {
+      const aid = a.id ?? "";
+      if (filter === "undecided" && decisions[aid]) return false;
+      if (filter !== "all" && filter !== "undecided" && decisions[aid] !== filter) return false;
+      if (importanceFilter !== "all" && a.importance !== importanceFilter) return false;
+      return true;
+    }), [sortedArticles, filter, importanceFilter, decisions]);
 
-  const article = filteredArticles[currentIndex];
-  const decided = Object.values(decisions).filter(
-    (d) => d !== null && d !== undefined && d !== ""
-  ).length;
-  const progressPercent =
-    articles.length > 0 ? (decided / articles.length) * 100 : 0;
+  // 統計
+  const decided = Object.values(decisions).filter(Boolean).length;
+  const pct = articles.length > 0 ? (decided / articles.length) * 100 : 0;
+  const counts = { mandatory: 0, recommended: 0, optional: 0 };
+  for (const a of articles) counts[a.importance]++;
+  const allDone = articles.length > 0 && decided === articles.length;
+  const selectedArticle = selectedId ? articles.find((a) => a.id === selectedId) ?? null : null;
 
   // ---------- ハンドラ ----------
-
-  /** 判断を確定 */
-  async function handleDecision(decision: Decision) {
-    if (!article?.id) return;
-
-    // 法的必須の保留に対する警告
-    if (
-      decision === "pending" &&
-      article.importance === "mandatory" &&
-      !confirm(
-        "この項目は法改正への対応として必須です。\n保留にすると、改正後の規約が法的に不完全になるリスクがあります。\nそれでも保留にしますか？"
-      )
-    ) {
-      return;
-    }
-
+  async function handleDecision(article: ReviewArticle, decision: Decision) {
+    if (!article.id) return;
+    if (decision === "pending" && article.importance === "mandatory" &&
+      !confirm("この項目は法改正への対応として必須です。\n保留にすると、改正後の規約が法的に不完全になるリスクがあります。\nそれでも保留にしますか？")) return;
     const next = { ...decisions, [article.id]: decision };
     setDecisions(next);
     saveReviewDecisions(next);
-
-    // API に判断を送信（非同期、エラーは静かに処理）
     const pid = loadProjectId();
     if (pid) {
-      try {
-        await decideReview(pid, article.articleNum, { type: decision === "adopted" ? "ADOPT" : decision === "modified" ? "MODIFY" as const : "RESET" as const, ...(decision === "modified" ? { newText: article.draft, reason: "レビュー画面で修正" } : {}) } as import("@/domains/review/types").ReviewEvent);
-      } catch (err) {
-        console.error("判断の保存に失敗:", err);
+      try { await decideReview(pid, article.articleNum, buildEvent(decision, article.draft)); }
+      catch (err) { console.error("判断の保存に失敗:", err); }
+    }
+  }
+
+  async function handleApproveAllAi() {
+    const targets = articles.filter((a) => a.id && !decisions[a.id!]);
+    if (targets.length === 0) return;
+    const next = { ...decisions };
+    for (const a of targets) next[a.id!] = getAiRec(a);
+    setDecisions(next);
+    saveReviewDecisions(next);
+    const pid = loadProjectId();
+    if (pid) {
+      for (const a of targets) {
+        const rec = getAiRec(a);
+        decideReview(pid, a.articleNum, buildEvent(rec, a.draft)).catch((e) => console.error("AI推奨承認失敗:", e));
       }
     }
   }
 
-  /** メモ変更 */
-  function handleMemoChange(value: string) {
-    if (!article?.id) return;
-    const next = { ...memos, [article.id]: value };
-    setMemos(next);
-    saveReviewMemos(next);
-  }
-
-  /** ドラフト編集 */
-  function handleDraftEdit(value: string) {
-    if (!article?.id) return;
-    setEditedDrafts((prev) => ({ ...prev, [article.id!]: value }));
-  }
-
-  /** ドラフト保存 */
-  async function handleDraftSave() {
-    if (!article?.id) return;
+  async function handleBulkAdopt() {
+    if (checkedIds.size === 0) return;
+    const next = { ...decisions };
+    const targets = articles.filter((a) => a.id && checkedIds.has(a.id));
+    for (const a of targets) next[a.id!] = "adopted";
+    setDecisions(next);
+    saveReviewDecisions(next);
+    setCheckedIds(new Set());
     const pid = loadProjectId();
-    if (!pid) return;
+    if (pid) {
+      for (const a of targets) {
+        decideReview(pid, a.articleNum, buildEvent("adopted")).catch((e) => console.error("一括採用失敗:", e));
+      }
+    }
+  }
 
-    const editedText = editedDrafts[article.id];
-    if (editedText === undefined) return;
-
+  function handleMemoChange(value: string) {
+    if (!selectedArticle?.id) return;
+    const next = { ...memos, [selectedArticle.id]: value };
+    setMemos(next); saveReviewMemos(next);
+  }
+  function handleDraftEdit(value: string) {
+    if (!selectedArticle?.id) return;
+    setEditedDrafts((prev) => ({ ...prev, [selectedArticle.id!]: value }));
+  }
+  async function handleDraftSave() {
+    if (!selectedArticle?.id) return;
+    const pid = loadProjectId(); if (!pid) return;
+    const t = editedDrafts[selectedArticle.id]; if (t === undefined) return;
     try {
-      await patchReviewArticle(pid, {
-        articleNum: article.articleNum,
-        draft: editedText,
-      });
-      // articles 配列も更新
-      setArticles((prev) =>
-        prev.map((a) =>
-          a.id === article.id ? { ...a, draft: editedText } : a
-        )
-      );
-    } catch (err) {
-      console.error("ドラフト保存に失敗:", err);
-    }
+      await patchReviewArticle(pid, { articleNum: selectedArticle.articleNum, draft: t });
+      setArticles((prev) => prev.map((a) => (a.id === selectedArticle.id ? { ...a, draft: t } : a)));
+    } catch (err) { console.error("ドラフト保存に失敗:", err); }
   }
 
-  /** ナビゲーション */
-  function goTo(index: number) {
-    if (index >= 0 && index < filteredArticles.length) {
-      setCurrentIndex(index);
-      setShowCurrentText(false);
-    }
-  }
-
-  /** AIドラフト再生成 */
   async function handleGenerateDraft() {
-    if (!article?.id) return;
-    const pid = loadProjectId() ?? "default";
-
-    setDraftLoading((prev) => ({ ...prev, [article.id!]: true }));
-    setDraftErrors((prev) => {
-      const next = { ...prev };
-      delete next[article.id!];
-      return next;
-    });
-
+    if (!selectedArticle?.id) return;
+    const sid = selectedArticle.id;
+    setDraftLoading((p) => ({ ...p, [sid]: true }));
+    setDraftErrors((p) => { const n = { ...p }; delete n[sid]; return n; });
     try {
-      const result = await callDraftSingle({
-        articleNum: article.articleNum,
-        category: article.category,
-        currentText: article.original,
-        gapSummary: article.summary,
-        importance: article.importance,
+      const r = await callDraftSingle({
+        articleNum: selectedArticle.articleNum, category: selectedArticle.category,
+        currentText: selectedArticle.original, gapSummary: selectedArticle.summary,
+        importance: selectedArticle.importance,
         condoContext: { condoName: "マンション", condoType: "unknown", unitCount: "medium" },
       });
-
-      // 該当の article を更新
-      setArticles((prev) =>
-        prev.map((a) =>
-          a.id === article.id
-            ? {
-                ...a,
-                draft: result.draft,
-                summary: result.summary || a.summary,
-                explanation: result.explanation || a.explanation,
-              }
-            : a
-        )
-      );
-      // 編集中ドラフトもクリア
-      setEditedDrafts((prev) => {
-        const next = { ...prev };
-        delete next[article.id!];
-        return next;
-      });
+      setArticles((p) => p.map((a) => a.id === sid
+        ? { ...a, draft: r.draft, summary: r.summary || a.summary, explanation: r.explanation || a.explanation } : a));
+      setEditedDrafts((p) => { const n = { ...p }; delete n[sid]; return n; });
     } catch (err) {
       console.error("ドラフト生成エラー:", err);
-      setDraftErrors((prev) => ({
-        ...prev,
-        [article.id!]:
-          err instanceof Error
-            ? err.message
-            : "ドラフト生成中にエラーが発生しました",
-      }));
-    } finally {
-      setDraftLoading((prev) => ({ ...prev, [article.id!]: false }));
-    }
+      setDraftErrors((p) => ({ ...p, [sid]: err instanceof Error ? err.message : "ドラフト生成中にエラーが発生しました" }));
+    } finally { setDraftLoading((p) => ({ ...p, [sid]: false })); }
   }
 
-  const allDone = articles.length > 0 && decided === articles.length;
+  function handleToggleAll() {
+    setCheckedIds(checkedIds.size === filteredArticles.length ? new Set() : new Set(filteredArticles.map((a) => a.id ?? "")));
+  }
+  function handleToggleCheck(id: string) {
+    setCheckedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
 
-  // ---------- ローディング画面 ----------
-
+  // ---------- ローディング / エラー ----------
   if (phase === "loading") {
     return (
       <div className="flex flex-col min-h-screen">
@@ -347,29 +257,9 @@ export default function ReviewPage() {
           <Card className="max-w-md w-full">
             <CardContent className="py-8 text-center space-y-4">
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 animate-pulse">
-                <svg
-                  className="w-6 h-6 text-primary animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
+                <Spinner className="w-6 h-6 text-primary" />
               </div>
-              <p className="text-sm text-muted-foreground">
-                レビューデータを準備中...
-              </p>
+              <p className="text-sm text-muted-foreground">レビューデータを準備中...</p>
             </CardContent>
           </Card>
         </main>
@@ -377,9 +267,6 @@ export default function ReviewPage() {
       </div>
     );
   }
-
-  // ---------- エラー画面 ----------
-
   if (phase === "error") {
     return (
       <div className="flex flex-col min-h-screen">
@@ -388,9 +275,7 @@ export default function ReviewPage() {
           <Card className="max-w-md w-full">
             <CardContent className="py-8 text-center space-y-4">
               <p className="text-sm text-red-600">{errorMessage}</p>
-              <Button asChild>
-                <Link href="/analysis">分析画面に戻る</Link>
-              </Button>
+              <Button asChild><Link href="/analysis">分析画面に戻る</Link></Button>
             </CardContent>
           </Card>
         </main>
@@ -399,327 +284,191 @@ export default function ReviewPage() {
     );
   }
 
-  // ---------- 空の場合（フィルター結果含む） ----------
+  // ---------- 詳細パネル用 ----------
+  const selId = selectedArticle?.id ?? "";
+  const isDraftLoading = draftLoading[selId] ?? false;
+  const draftError = draftErrors[selId];
+  const currentDraftText = editedDrafts[selId] ?? selectedArticle?.draft ?? "";
+  const isDraftEdited = editedDrafts[selId] !== undefined && editedDrafts[selId] !== selectedArticle?.draft;
 
-  if (filteredArticles.length === 0 || !article) {
-    return (
-      <div className="flex flex-col min-h-screen">
-        <AppHeader currentStep={"review" as StepId} />
-        <main className="flex-1 max-w-2xl mx-auto px-4 py-8 w-full">
-          {/* 進捗バー */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold">改正案レビュー</h2>
-              <span className="text-sm text-muted-foreground">
-                {decided}/{articles.length} 完了
-              </span>
-            </div>
-            <Progress value={progressPercent} className="mt-2" />
-          </div>
-
-          {/* フィルター */}
-          <div className="flex gap-2 mb-6 flex-wrap">
-            {FILTER_OPTIONS.map((opt) => (
-              <Button
-                key={opt.value}
-                variant={filter === opt.value ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setFilter(opt.value);
-                  setCurrentIndex(0);
-                }}
-              >
-                {opt.label}
-              </Button>
-            ))}
-          </div>
-
-          <Card>
-            <CardContent className="py-8 text-center space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {filter === "all"
-                  ? "レビュー対象の項目がありません。"
-                  : `「${FILTER_OPTIONS.find((o) => o.value === filter)?.label}」に該当する項目はありません。`}
-              </p>
-              {filter !== "all" && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setFilter("all");
-                    setCurrentIndex(0);
-                  }}
-                >
-                  フィルターをリセット
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* 次のステップへ */}
-          {allDone && (
-            <div className="mt-6 text-center">
-              <Button asChild size="lg" className="min-h-[44px]">
-                <Link href="/export">次のステップへ</Link>
-              </Button>
-            </div>
-          )}
-        </main>
-        <AppFooter />
-      </div>
-    );
+  function decisionBadge(aid: string) {
+    const d = decisions[aid];
+    if (d === "adopted") return <Badge className="bg-green-500 text-white text-xs">採用</Badge>;
+    if (d === "modified") return <Badge className="bg-yellow-500 text-white text-xs">修正</Badge>;
+    if (d === "pending") return <Badge className="bg-gray-400 text-white text-xs">保留</Badge>;
+    return null;
   }
-
-  const articleId = article.id ?? "";
-  const isDraftLoading = draftLoading[articleId] ?? false;
-  const draftError = draftErrors[articleId];
-  const currentDraftText = editedDrafts[articleId] ?? article.draft ?? "";
-  const isDraftEdited =
-    editedDrafts[articleId] !== undefined &&
-    editedDrafts[articleId] !== article.draft;
 
   // ---------- メイン表示 ----------
-
   return (
     <div className="flex flex-col min-h-screen">
       <AppHeader currentStep={"review" as StepId} />
-
-      <main className="flex-1 max-w-2xl mx-auto px-4 py-8 w-full">
-        {/* ヘッダー＆進捗 */}
-        <div className="mb-6">
-          <Badge variant="secondary" className="mb-2">
-            ステップ 5 / 6
-          </Badge>
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold">改正案レビュー</h2>
-            <span className="text-sm text-muted-foreground">
-              {decided}/{articles.length} 完了
-            </span>
-          </div>
-          <Progress value={progressPercent} className="mt-2" />
+      <main className="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
+        {/* ヘッダー */}
+        <div className="mb-4">
+          <Badge variant="secondary" className="mb-2">ステップ 5 / 6</Badge>
+          <h2 className="text-xl font-bold">改正案レビュー</h2>
         </div>
 
-        {/* フィルター */}
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {FILTER_OPTIONS.map((opt) => (
-            <Button
-              key={opt.value}
-              variant={filter === opt.value ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                setFilter(opt.value);
-                setCurrentIndex(0);
-              }}
-            >
-              {opt.label}
-            </Button>
-          ))}
-        </div>
-
-        {/* レビューカード */}
-        <Card className="mb-6">
-          <CardContent className="pt-6 space-y-5">
-            {/* カードヘッダー: 条番号、カテゴリ、重要度バッジ */}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                [{currentIndex + 1}/{filteredArticles.length}]{" "}
-                {article.articleNum}
-                {article.category && `（${article.category}）`}
-              </span>
-              <Badge
-                className={
-                  IMPORTANCE_STYLE[article.importance] ??
-                  IMPORTANCE_STYLE.optional
-                }
-              >
-                {IMPORTANCE_LABEL[article.importance] ?? "任意"}
-              </Badge>
+        {/* サマリーバー */}
+        <Card className="mb-4">
+          <CardContent className="py-4">
+            <div className="flex flex-wrap items-center gap-4 text-sm mb-2">
+              <span>全 <strong>{articles.length}</strong> 件</span>
+              <span className="text-red-600">法的必須: <strong>{counts.mandatory}</strong></span>
+              <span className="text-blue-600">推奨: <strong>{counts.recommended}</strong></span>
+              <span className="text-gray-500">任意: <strong>{counts.optional}</strong></span>
+              <span className="ml-auto">完了: <strong>{decided}</strong> / {articles.length}</span>
             </div>
-
-            {/* 要約: 何が変わる？ */}
-            <div>
-              <p className="text-sm font-medium mb-1">何が変わる？</p>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {article.summary}
-              </p>
-            </div>
-
-            {/* 現行規約テキスト（折りたたみ） */}
-            <div>
-              <button
-                onClick={() => setShowCurrentText(!showCurrentText)}
-                className="text-sm font-medium flex items-center gap-1 mb-2"
-              >
-                現行規約テキスト {showCurrentText ? "▲" : "▼"}
-              </button>
-              {showCurrentText && (
-                <div className="p-3 rounded-lg bg-red-50 border border-red-100">
-                  <p className="text-xs font-medium text-red-700 mb-1">
-                    現行（変更前）
-                  </p>
-                  <p className="text-sm text-red-900 whitespace-pre-line">
-                    {article.original ?? "（規定なし）"}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* AI ドラフト（編集可能テキストエリア） */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium">AI ドラフト</p>
-                {isDraftEdited && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDraftSave}
-                    className="text-xs"
-                  >
-                    編集を保存
-                  </Button>
-                )}
-              </div>
-              {article.draft ? (
-                <textarea
-                  value={currentDraftText}
-                  onChange={(e) => handleDraftEdit(e.target.value)}
-                  className="w-full text-sm p-3 border rounded-lg bg-blue-50 border-blue-100 text-blue-900 resize-none min-h-[120px] focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              ) : (
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
-                  <p className="text-sm text-muted-foreground">
-                    ドラフトが未生成です。下のボタンでAIにドラフトを生成させてください。
-                  </p>
-                </div>
-              )}
-              <Button
-                onClick={handleGenerateDraft}
-                disabled={isDraftLoading}
-                variant="outline"
-                size="sm"
-                className="w-full mt-2"
-              >
-                {isDraftLoading ? (
-                  <span className="flex items-center gap-2">
-                    <svg
-                      className="w-4 h-4 animate-spin"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    {article.draft ? "再生成中..." : "AIドラフト生成中..."}
-                  </span>
-                ) : article.draft ? (
-                  "AIドラフトを再生成"
-                ) : (
-                  "AIドラフト生成"
-                )}
-              </Button>
-              {draftError && (
-                <p className="text-xs text-red-600 mt-1">{draftError}</p>
-              )}
-              <p className="text-xs text-muted-foreground mt-1">
-                出典: {article.baseRef}
-              </p>
-            </div>
-
-            {/* 変更理由・解説 */}
-            {article.explanation && (
-              <div>
-                <p className="text-sm font-medium mb-1">変更理由・解説</p>
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {article.explanation}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* 判断ボタン（採用 / 修正 / 保留） */}
-            <div className="space-y-3 pt-2">
-              <div className="flex gap-3">
-                {(
-                  [
-                    { value: "adopted" as Decision, label: "採用" },
-                    { value: "modified" as Decision, label: "修正" },
-                    { value: "pending" as Decision, label: "保留" },
-                  ] as const
-                ).map((btn) => (
-                  <Button
-                    key={btn.value}
-                    variant={
-                      decisions[articleId] === btn.value
-                        ? "default"
-                        : "outline"
-                    }
-                    onClick={() => handleDecision(btn.value)}
-                    className="flex-1 min-h-[44px]"
-                  >
-                    {btn.label}
-                  </Button>
-                ))}
-              </div>
-
-              {/* メモ欄 */}
-              <textarea
-                placeholder="メモ（任意）"
-                value={memos[articleId] ?? ""}
-                onChange={(e) => handleMemoChange(e.target.value)}
-                className="w-full text-sm p-3 border rounded-lg bg-background resize-none h-16"
-              />
-            </div>
-
-            {/* ナビゲーション */}
-            <div className="flex items-center justify-between pt-2">
-              <Button
-                variant="outline"
-                onClick={() => goTo(currentIndex - 1)}
-                disabled={currentIndex === 0}
-                className="min-h-[44px]"
-              >
-                前へ
-              </Button>
-
-              {currentIndex < filteredArticles.length - 1 ? (
-                <Button
-                  onClick={() => goTo(currentIndex + 1)}
-                  className="min-h-[44px]"
-                >
-                  次へ
-                </Button>
-              ) : allDone ? (
-                <Button asChild className="min-h-[44px]">
-                  <Link href="/export">次のステップへ</Link>
-                </Button>
-              ) : (
-                <Button disabled className="min-h-[44px]">
-                  全項目を判断してください
-                </Button>
-              )}
-            </div>
+            <Progress value={pct} className="h-2" />
           </CardContent>
         </Card>
 
-        {/* セッション管理 */}
-        <div className="text-center">
-          <Button variant="ghost" size="sm" className="text-muted-foreground">
-            ここまで保存して終了
+        {/* 一括操作バー */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          {FILTER_OPTIONS.map((o) => (
+            <Button key={o.value} variant={filter === o.value ? "default" : "outline"} size="sm" onClick={() => setFilter(o.value)}>{o.label}</Button>
+          ))}
+          <span className="w-px h-6 bg-border mx-1" />
+          {IMPORTANCE_FILTER_OPTIONS.map((o) => (
+            <Button key={o.value} variant={importanceFilter === o.value ? "default" : "outline"} size="sm" onClick={() => setImportanceFilter(o.value)}>{o.label}</Button>
+          ))}
+          <span className="w-px h-6 bg-border mx-1" />
+          <Button size="sm" variant="outline" onClick={handleApproveAllAi}>AI推奨を全て承認</Button>
+          <Button size="sm" variant="outline" onClick={handleBulkAdopt} disabled={checkedIds.size === 0}>
+            選択した項目を一括採用 ({checkedIds.size})
           </Button>
         </div>
-      </main>
 
+        {/* テーブル */}
+        <div className="overflow-x-auto border rounded-lg mb-4">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 border-b">
+              <tr>
+                <th className="p-2 w-8">
+                  <input type="checkbox" checked={filteredArticles.length > 0 && checkedIds.size === filteredArticles.length} onChange={handleToggleAll} className="rounded border-gray-300" />
+                </th>
+                <th className="p-2 text-left whitespace-nowrap">条番号</th>
+                <th className="p-2 text-left whitespace-nowrap">カテゴリ</th>
+                <th className="p-2 text-left">要約</th>
+                <th className="p-2 text-center whitespace-nowrap">重要度</th>
+                <th className="p-2 text-center whitespace-nowrap">AI推奨</th>
+                <th className="p-2 text-center whitespace-nowrap">判断</th>
+                <th className="p-2 text-center whitespace-nowrap">ドラフト</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredArticles.length === 0 ? (
+                <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">該当する項目はありません。</td></tr>
+              ) : filteredArticles.map((a) => {
+                const aid = a.id ?? "";
+                const rec = getAiRec(a);
+                const isSel = selectedId === aid;
+                return (
+                  <tr key={aid} className={`border-b cursor-pointer transition-colors hover:bg-muted/30 ${isSel ? "bg-primary/5" : ""}`}
+                    onClick={() => { setSelectedId(isSel ? null : aid); setShowCurrentText(false); }}>
+                    <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={checkedIds.has(aid)} onChange={() => handleToggleCheck(aid)} className="rounded border-gray-300" />
+                    </td>
+                    <td className="p-2 whitespace-nowrap font-medium">{a.articleNum}</td>
+                    <td className="p-2 whitespace-nowrap text-muted-foreground">{a.category}</td>
+                    <td className="p-2 max-w-xs truncate">{a.summary}</td>
+                    <td className="p-2 text-center">
+                      <Badge className={`text-xs ${IMPORTANCE_STYLE[a.importance] ?? IMPORTANCE_STYLE.optional}`}>{IMPORTANCE_LABEL[a.importance] ?? "任意"}</Badge>
+                    </td>
+                    <td className="p-2 text-center">
+                      <span className={`text-base ${rec === "adopted" ? "text-green-600" : rec === "modified" ? "text-yellow-600" : "text-gray-400"}`}
+                        title={rec === "adopted" ? "採用推奨" : rec === "modified" ? "要確認" : "保留推奨"}>{aiRecIcon(rec)}</span>
+                    </td>
+                    <td className="p-2 text-center">{decisionBadge(aid)}</td>
+                    <td className="p-2 text-center">
+                      {a.draft ? <span className="text-green-600" title="生成済み">{"\u2713"}</span> : <span className="text-gray-400" title="未生成">{"\u2212"}</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 詳細パネル（テーブル下に展開） */}
+        {selectedArticle && (
+          <Card className="mb-6">
+            <CardContent className="pt-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">{selectedArticle.articleNum}{selectedArticle.category && `（${selectedArticle.category}）`}</span>
+                <Badge className={IMPORTANCE_STYLE[selectedArticle.importance] ?? IMPORTANCE_STYLE.optional}>{IMPORTANCE_LABEL[selectedArticle.importance] ?? "任意"}</Badge>
+              </div>
+              {/* 要約 */}
+              <div>
+                <p className="text-sm font-medium mb-1">何が変わる？</p>
+                <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.summary}</p>
+              </div>
+              {/* 現行規約（折りたたみ） */}
+              <div>
+                <button onClick={() => setShowCurrentText(!showCurrentText)} className="text-sm font-medium flex items-center gap-1 mb-2">
+                  現行規約テキスト {showCurrentText ? "\u25B2" : "\u25BC"}
+                </button>
+                {showCurrentText && (
+                  <div className="p-3 rounded-lg bg-red-50 border border-red-100">
+                    <p className="text-xs font-medium text-red-700 mb-1">現行（変更前）</p>
+                    <p className="text-sm text-red-900 whitespace-pre-line">{selectedArticle.original ?? "（規定なし）"}</p>
+                  </div>
+                )}
+              </div>
+              {/* AIドラフト */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium">AI ドラフト</p>
+                  {isDraftEdited && <Button variant="outline" size="sm" onClick={handleDraftSave} className="text-xs">編集を保存</Button>}
+                </div>
+                {selectedArticle.draft ? (
+                  <textarea value={currentDraftText} onChange={(e) => handleDraftEdit(e.target.value)}
+                    className="w-full text-sm p-3 border rounded-lg bg-blue-50 border-blue-100 text-blue-900 resize-none min-h-[120px] focus:outline-none focus:ring-2 focus:ring-ring" />
+                ) : (
+                  <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                    <p className="text-sm text-muted-foreground">ドラフトが未生成です。下のボタンでAIにドラフトを生成させてください。</p>
+                  </div>
+                )}
+                <Button onClick={handleGenerateDraft} disabled={isDraftLoading} variant="outline" size="sm" className="w-full mt-2">
+                  {isDraftLoading ? (
+                    <span className="flex items-center gap-2"><Spinner />{selectedArticle.draft ? "再生成中..." : "AIドラフト生成中..."}</span>
+                  ) : selectedArticle.draft ? "AIドラフトを再生成" : "AIドラフト生成"}
+                </Button>
+                {draftError && <p className="text-xs text-red-600 mt-1">{draftError}</p>}
+                {selectedArticle.baseRef && <p className="text-xs text-muted-foreground mt-1">出典: {selectedArticle.baseRef}</p>}
+              </div>
+              {/* 変更理由・解説 */}
+              {selectedArticle.explanation && (
+                <div>
+                  <p className="text-sm font-medium mb-1">変更理由・解説</p>
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.explanation}</p>
+                  </div>
+                </div>
+              )}
+              {/* 判断ボタン + メモ */}
+              <div className="space-y-3 pt-2">
+                <div className="flex gap-3">
+                  {([{ value: "adopted" as Decision, label: "採用" }, { value: "modified" as Decision, label: "修正" }, { value: "pending" as Decision, label: "保留" }]).map((btn) => (
+                    <Button key={btn.value} variant={decisions[selId] === btn.value ? "default" : "outline"}
+                      onClick={() => handleDecision(selectedArticle, btn.value)} className="flex-1 min-h-[44px]">{btn.label}</Button>
+                  ))}
+                </div>
+                <textarea placeholder="メモ（任意）" value={memos[selId] ?? ""} onChange={(e) => handleMemoChange(e.target.value)}
+                  className="w-full text-sm p-3 border rounded-lg bg-background resize-none h-16" />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 次のステップへ CTA */}
+        {allDone && (
+          <div className="text-center">
+            <Button asChild size="lg" className="min-h-[44px]"><Link href="/export">次のステップへ</Link></Button>
+          </div>
+        )}
+      </main>
       <AppFooter />
     </div>
   );

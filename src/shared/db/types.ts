@@ -71,6 +71,8 @@ export interface ReviewArticle {
   memo: string;
   /** カテゴリ（章名など） */
   category: string;
+  /** AI による推奨判断 */
+  aiRecommendation?: "adopted" | "modified" | "pending" | null;
 }
 
 // ---------- AI キャッシュ ----------

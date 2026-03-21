@@ -232,6 +232,74 @@ interface DraftingCallbacks {
   onError?: (message: string) => void;
 }
 
+/** 自動ドラフト生成 SSE のコールバック */
+interface AutoDraftCallbacks {
+  onProgress?: (data: {
+    current: number;
+    total: number;
+    articleNum: string;
+    phase: "retrieval" | "generation" | "retry";
+  }) => void;
+  onComplete?: (data: BatchDraftResult) => void;
+  onError?: (message: string) => void;
+}
+
+/**
+ * POST /api/drafting/auto-generate (SSE)
+ * 分析完了後に自動でドラフトを一括生成する
+ */
+export function startAutoGenerate(
+  projectId: string,
+  mode: "smart" | "precise",
+  condoContext: CondoContext,
+  callbacks: AutoDraftCallbacks,
+): AbortController {
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      const res = await fetch("/api/drafting/auto-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, mode, condoContext }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        callbacks.onError?.(
+          (err as { error?: string }).error ??
+            "ドラフト自動生成の開始に失敗しました",
+        );
+        return;
+      }
+
+      await consumeSSE(res, {
+        progress: (data) => {
+          callbacks.onProgress?.(
+            data as { current: number; total: number; articleNum: string; phase: "retrieval" | "generation" | "retry" },
+          );
+        },
+        complete: (data) => {
+          callbacks.onComplete?.(data as BatchDraftResult);
+        },
+        error: (data) => {
+          callbacks.onError?.((data as { message: string }).message);
+        },
+      });
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      callbacks.onError?.(
+        err instanceof Error
+          ? err.message
+          : "ドラフト生成中に通信エラーが発生しました",
+      );
+    }
+  })();
+
+  return controller;
+}
+
 /**
  * POST /api/drafting/generate (SSE)
  * 複数条文のドラフトを一括生成し、SSE で進捗を通知する

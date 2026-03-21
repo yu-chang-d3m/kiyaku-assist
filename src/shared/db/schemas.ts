@@ -43,4 +43,5 @@ export const ReviewArticleSchema = z.object({
   modificationHistory: z.array(z.string()),
   memo: z.string().default(""),
   category: z.string(),
+  aiRecommendation: z.enum(["adopted", "modified", "pending"]).nullable().optional(),
 });

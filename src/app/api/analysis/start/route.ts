@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
         );
 
         // Phase 3: 分析結果を Firestore に ReviewArticle として保存
+        // 成功した分析結果 + 失敗した条文（プレースホルダー）の両方を保存
         try {
           const reviewArticles = analysisResult.items.map((item) => ({
             projectId,
@@ -129,11 +130,41 @@ export async function POST(request: NextRequest) {
             category: item.category,
           }));
 
-          await batchSaveReviewArticles(projectId, reviewArticles);
+          // 分析に失敗した条文もプレースホルダーとして保存
+          // （items に含まれなかった条文を特定）
+          const analyzedNums = new Set(analysisResult.items.map((i) => i.articleNum));
+          const failedArticles = articles
+            .filter((a) => !analyzedNums.has(a.articleNum))
+            .map((a) => ({
+              projectId,
+              chapter: 0,
+              articleNum: a.articleNum,
+              original: a.currentText ?? null,
+              draft: "",
+              summary: "分析が完了していません（再分析が必要です）",
+              explanation: "",
+              importance: "recommended" as const,
+              baseRef: "",
+              decision: null as "adopted" | "modified" | "pending" | null,
+              modificationHistory: [] as string[],
+              memo: "",
+              category: a.category,
+            }));
+
+          const allArticles = [...reviewArticles, ...failedArticles];
+          await batchSaveReviewArticles(projectId, allArticles);
           logger.info(
-            { projectId, savedCount: reviewArticles.length },
-            "分析結果を Firestore に保存完了",
+            { projectId, savedCount: reviewArticles.length, failedCount: failedArticles.length },
+            "分析結果を Firestore に保存完了（失敗分含む）",
           );
+
+          if (failedArticles.length > 0) {
+            send("progress", {
+              current: total,
+              total,
+              articleNum: `${failedArticles.length} 件の条文は分析に失敗しました（レビュー画面から再分析可能）`,
+            });
+          }
         } catch (saveError) {
           logger.error(
             { projectId, error: saveError },

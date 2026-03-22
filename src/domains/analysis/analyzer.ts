@@ -383,17 +383,29 @@ export async function analyzeGaps(
         completedCount += batch.length;
         onBatchComplete?.(completedCount, articles.length, batchArticleNums);
       } else {
-        logger.error(
+        logger.warn(
           { batchArticleNums, error: result.reason },
-          "バッチ分析に失敗",
+          "バッチ分析に失敗、個別にリトライ",
         );
+
+        // バッチ全体が失敗した場合、1件ずつリトライ
         for (const article of batch) {
-          errors.push({
-            articleNum: article.articleNum,
-            error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-          });
+          try {
+            const retryResult = await analyzeBatchArticles([article]);
+            items.push(...retryResult);
+            logger.info({ articleNum: article.articleNum }, "個別リトライ成功");
+          } catch (retryError) {
+            logger.error(
+              { articleNum: article.articleNum, error: retryError },
+              "個別リトライも失敗",
+            );
+            errors.push({
+              articleNum: article.articleNum,
+              error: retryError instanceof Error ? retryError.message : String(retryError),
+            });
+          }
+          completedCount++;
         }
-        completedCount += batch.length;
         onBatchComplete?.(completedCount, articles.length, batchArticleNums);
       }
     }

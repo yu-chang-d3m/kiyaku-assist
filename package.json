@@ -10,7 +10,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:unit": "vitest run --exclude '**/*.eval.test.ts'",
+    "test:eval": "EVALS=1 vitest run --include '**/*.eval.test.ts'",
+    "test:ci": "vitest run --exclude '**/*.eval.test.ts' --reporter=junit --outputFile=test-results.xml",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

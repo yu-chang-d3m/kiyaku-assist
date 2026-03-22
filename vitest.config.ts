@@ -9,6 +9,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // eval テストはデフォルトでは除外（pnpm test:eval で実行）
+    exclude: ['**/node_modules/**', '**/*.eval.test.ts'],
     coverage: {
       reporter: ['text', 'json', 'html'],
       include: ['src/domains/**', 'src/shared/**'],
@@ -20,3 +22,13 @@ export default defineConfig({
     },
   },
 });
+
+/**
+ * eval テストの実行方法:
+ *
+ *   EVALS=1 vitest run --include '**\/*.eval.test.ts'
+ *
+ * または:
+ *
+ *   pnpm test:eval
+ */

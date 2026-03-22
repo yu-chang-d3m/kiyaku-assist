@@ -75,7 +75,7 @@ function ReviewPageContent() {
   const { user } = useAuth();
 
   const [articles, setArticles] = useState<ReviewArticle[]>([]);
-  const [decisions, setDecisions] = useState<Record<string, string>>({});
+  const [decisions, setDecisions] = useState<Record<string, Decision | null>>({});
   const [memos, setMemos] = useState<Record<string, string>>({});
   const [editedDrafts, setEditedDrafts] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<FilterType>("all");
@@ -114,7 +114,7 @@ function ReviewPageContent() {
       const sd = loadReviewDecisions();
       if (sd && Object.keys(sd).length > 0) { setDecisions(sd); }
       else {
-        const init: Record<string, string> = {};
+        const init: Record<string, Decision | null> = {};
         for (const a of fetched) if (a.id && a.decision) init[a.id] = a.decision;
         setDecisions(init);
       }

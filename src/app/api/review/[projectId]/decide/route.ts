@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as z from "zod/v4";
 import { applyEvent, createInitialState } from "@/domains/review/state-machine";
-import { historyToStringArray } from "@/domains/review/history";
+import { historyToStringArray, stringArrayToHistory } from "@/domains/review/history";
 import {
   getReviewArticles,
   saveReviewArticle,
@@ -85,11 +85,12 @@ export async function POST(
       );
     }
 
-    // ReviewArticle → ReviewArticleState に変換
+    // ReviewArticle → ReviewArticleState に変換（既存の状態を完全に復元）
     const currentState = createInitialState(existing.articleNum, existing.draft);
-    // 既存の decision と memo を復元
     currentState.decision = existing.decision;
     currentState.memo = existing.memo;
+    // 既存の修正履歴を復元（string[] → ModificationEntry[]）
+    currentState.history = stringArrayToHistory(existing.modificationHistory ?? []);
 
     // イベントを適用して新しい状態を取得
     const newState = applyEvent(currentState, event);
@@ -112,6 +113,7 @@ export async function POST(
       modificationHistory,
       memo: newState.memo,
       category: existing.category,
+      aiRecommendation: existing.aiRecommendation,
     };
 
     await saveReviewArticle(projectId, updatedArticle);

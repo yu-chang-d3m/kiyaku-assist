@@ -9,6 +9,7 @@
  * - Firebase Admin SDK を使用（セキュリティルールをバイパス）
  */
 
+import { Timestamp } from "firebase-admin/firestore";
 import { sha256Hash } from "@/shared/ai/claude";
 import { getAdminDb } from "@/shared/db/admin";
 import { logger } from "@/shared/observability/logger";
@@ -19,8 +20,8 @@ import { logger } from "@/shared/observability/logger";
 interface CacheEntry {
   cacheKey: string;
   response: unknown;
-  createdAt: Date;
-  expiresAt: Date;
+  createdAt: Timestamp;
+  expiresAt: Timestamp;
 }
 
 // ---------- キャッシュ操作 ----------
@@ -41,12 +42,16 @@ export async function getCachedResponse(cacheKey: string): Promise<unknown | nul
     const data = snapshot.data() as CacheEntry;
 
     // 有効期限チェック
-    const expiresAt = data.expiresAt instanceof Date
-      ? data.expiresAt
-      : new Date((data.expiresAt as unknown as { _seconds: number })._seconds * 1000);
+    const expiresAt = data.expiresAt instanceof Timestamp
+      ? data.expiresAt.toDate()
+      : new Date(data.expiresAt as unknown as number);
 
     if (expiresAt < new Date()) {
-      logger.info({ cacheKey }, "キャッシュ期限切れ");
+      logger.info({ cacheKey }, "キャッシュ期限切れ — 削除");
+      // fire-and-forget で期限切れエントリを削除
+      db.collection("aiCache").doc(cacheKey).delete().catch((err) => {
+        logger.warn({ cacheKey, error: err }, "期限切れキャッシュの削除に失敗");
+      });
       return null;
     }
 
@@ -79,8 +84,8 @@ export async function setCachedResponse(
     const entry: CacheEntry = {
       cacheKey,
       response,
-      createdAt: now,
-      expiresAt,
+      createdAt: Timestamp.fromDate(now),
+      expiresAt: Timestamp.fromDate(expiresAt),
     };
 
     await db.collection("aiCache").doc(cacheKey).set(entry);
@@ -100,6 +105,7 @@ export async function setCachedResponse(
  * @returns SHA-256 ハッシュ文字列
  */
 export function generateCacheKey(...inputs: string[]): string {
-  const combined = inputs.join("|");
+  // 各入力値の長さをプレフィックスに含めることで区切り文字の衝突を防止
+  const combined = inputs.map((s) => `${s.length}:${s}`).join("|");
   return sha256Hash(combined);
 }

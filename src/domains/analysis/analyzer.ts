@@ -78,6 +78,7 @@ async function analyzeArticle(
   // キャッシュチェック
   const cacheKey = generateCacheKey(
     "gap_analysis",
+    MODELS.ANALYSIS,
     articleNum,
     currentText ?? "",
     relatedDocs.map((d) => d.content).join(""),
@@ -224,6 +225,7 @@ async function analyzeBatchArticles(
   for (const article of articles) {
     const cacheKey = generateCacheKey(
       "gap_analysis",
+      MODELS.ANALYSIS,
       article.articleNum,
       article.currentText ?? "",
       article.relatedDocs.map((d) => d.content).join(""),
@@ -314,6 +316,7 @@ articleNum は入力と完全に一致する値を返してください。`;
     // キャッシュ保存
     const cacheKey = generateCacheKey(
       "gap_analysis",
+      MODELS.ANALYSIS,
       article.articleNum,
       article.currentText ?? "",
       article.relatedDocs.map((d) => d.content).join(""),

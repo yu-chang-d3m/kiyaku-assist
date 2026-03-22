@@ -10,6 +10,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getReviewArticles } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }

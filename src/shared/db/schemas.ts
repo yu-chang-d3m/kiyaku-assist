@@ -44,4 +44,5 @@ export const ReviewArticleSchema = z.object({
   memo: z.string().default(""),
   category: z.string(),
   aiRecommendation: z.enum(["adopted", "modified", "pending"]).nullable().optional(),
+  updatedAt: z.string().optional(),
 });

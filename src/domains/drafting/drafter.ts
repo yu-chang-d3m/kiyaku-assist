@@ -65,9 +65,12 @@ async function generateDraft(request: DraftRequest): Promise<DraftResult> {
   // キャッシュチェック
   const cacheKey = generateCacheKey(
     "draft",
+    MODELS.ANALYSIS,
     request.articleNum,
     request.currentText ?? "",
     request.standardText,
+    request.gapSummary,
+    request.importance,
     request.condoContext.condoType,
     request.condoContext.unitCount,
   );

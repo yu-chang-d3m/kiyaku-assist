@@ -5,7 +5,6 @@
  * Firestore ドキュメントの読み書き時にこれらの型を使用する。
  */
 
-import type { Timestamp } from "firebase/firestore";
 
 // ---------- プロジェクト ----------
 
@@ -30,10 +29,10 @@ export interface Project {
   hasCurrentRules: boolean;
   /** 現在のステップ番号 */
   currentStep: number;
-  /** 作成日時 */
-  createdAt: Timestamp;
-  /** 更新日時 */
-  updatedAt: Timestamp;
+  /** 作成日時（ISO 文字列） */
+  createdAt: string;
+  /** 更新日時（ISO 文字列） */
+  updatedAt: string;
 }
 
 // ---------- レビュー記事 ----------
@@ -73,6 +72,8 @@ export interface ReviewArticle {
   category: string;
   /** AI による推奨判断 */
   aiRecommendation?: "adopted" | "modified" | "pending" | null;
+  /** 更新日時（Firestore サーバータイムスタンプ） */
+  updatedAt?: string;
 }
 
 // ---------- AI キャッシュ ----------
@@ -80,16 +81,19 @@ export interface ReviewArticle {
 /**
  * AI レスポンスのキャッシュ
  * Firestore パス: aiCache/{cacheKey}
+ *
+ * 注意: Timestamp は Admin SDK の firebase-admin/firestore 経由で保存される。
+ * 実際の読み書きは src/shared/ai/cache.ts の CacheEntry を使用する。
  */
 export interface CachedResponse {
   /** キャッシュキー（SHA-256 ハッシュ） */
   cacheKey: string;
   /** キャッシュされたレスポンスデータ */
   response: unknown;
-  /** 作成日時 */
-  createdAt: Timestamp;
-  /** 有効期限 */
-  expiresAt: Timestamp;
+  /** 作成日時（ISO 文字列 or Timestamp） */
+  createdAt: string | unknown;
+  /** 有効期限（ISO 文字列 or Timestamp） */
+  expiresAt: string | unknown;
 }
 
 // ---------- ユーティリティ型 ----------

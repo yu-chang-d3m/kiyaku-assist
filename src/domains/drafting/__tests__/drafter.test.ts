@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { DraftRequest, DraftResult } from "@/domains/drafting/types";
 import { SAMPLE_GAP_RESULTS } from "@/test/fixtures/sample-bylaws";
 
@@ -186,9 +186,12 @@ describe("Drafter — generateDraft", () => {
 
       expect(mockGenerateCacheKey).toHaveBeenCalledWith(
         "draft",
+        "claude-sonnet-4-5-20250929",
         "第3条",
         request.currentText,
         request.standardText,
+        request.gapSummary,
+        request.importance,
         "corporate",
         "medium",
       );

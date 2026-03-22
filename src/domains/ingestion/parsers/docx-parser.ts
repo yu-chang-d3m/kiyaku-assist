@@ -31,7 +31,7 @@ export class DocxParser implements ArticleParser {
           totalChapters: 0,
           chapterNames: [],
           parsedAt: new Date().toISOString(),
-          sourceFormat: "text",
+          sourceFormat: "docx",
           warnings: [
             "Wordファイルからテキストを抽出できませんでした。ファイルが破損していないか確認してください。",
           ],
@@ -50,6 +50,7 @@ export class DocxParser implements ArticleParser {
       ...parseResult,
       metadata: {
         ...parseResult.metadata,
+        sourceFormat: "docx",
         warnings: [...parseResult.metadata.warnings, ...mammothWarnings],
       },
     };

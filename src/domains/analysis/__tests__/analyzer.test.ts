@@ -385,9 +385,15 @@ describe("analyzeGaps — エラーハンドリング", () => {
     const articleNums = Array.from({ length: 20 }, (_, i) => `第${i + 1}条`);
     const articles = articleNums.map((num) => makeArticleInput({ articleNum: num }));
 
-    mockCallWithStructuredOutput
-      .mockRejectedValueOnce(new Error("API エラー"))
-      .mockResolvedValueOnce(makeBatchAnalysisOutput(articleNums.slice(10)));
+    // バッチ内容に基づいて挙動を制御
+    // （mockRejectedValueOnce では個別リトライが batch 2 用モックを消費してしまうため）
+    mockCallWithStructuredOutput.mockImplementation(async (params: { userMessage: string }) => {
+      // バッチ2（第11条〜第20条）の呼び出しのみ成功させる
+      if (params.userMessage.includes("第11条")) {
+        return makeBatchAnalysisOutput(articleNums.slice(10));
+      }
+      throw new Error("API エラー");
+    });
 
     const result = await analyzeGaps("proj-error", articles, undefined, 1);
 

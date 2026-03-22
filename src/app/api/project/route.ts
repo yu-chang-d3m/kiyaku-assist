@@ -10,6 +10,8 @@ import { listProjects, createProject } from "@/shared/db/server-actions";
 import { ProjectCreateSchema } from "@/shared/db/schemas";
 import { logger } from "@/shared/observability/logger";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET: ユーザーに紐づくプロジェクト一覧を返す
  */

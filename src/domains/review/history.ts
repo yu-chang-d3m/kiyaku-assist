@@ -86,3 +86,35 @@ function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength) + "...";
 }
+
+/**
+ * Firestore の modificationHistory (string[]) をドメインモデルの ModificationEntry[] に変換する
+ *
+ * フォーマット: "[ISO日時] 理由: 修正後テキスト(先頭100文字)"
+ * 注意: historyToStringArray() は不可逆変換（before が失われる）のため、
+ *       逆変換では before を空文字で埋める。
+ */
+export function stringArrayToHistory(entries: string[]): ModificationEntry[] {
+  return entries.map((entry) => {
+    // "[2025-01-01T00:00:00.000Z] 理由: テキスト..." を分解
+    const isoMatch = entry.match(/^\[([^\]]+)\]\s*(.*)$/);
+    if (!isoMatch) {
+      return {
+        before: "",
+        after: entry,
+        reason: "（履歴の復元）",
+        modifiedAt: new Date().toISOString(),
+      };
+    }
+
+    const modifiedAt = isoMatch[1];
+    const rest = isoMatch[2];
+
+    // "理由: テキスト" を分解
+    const colonIdx = rest.indexOf(": ");
+    const reason = colonIdx >= 0 ? rest.slice(0, colonIdx) : rest;
+    const after = colonIdx >= 0 ? rest.slice(colonIdx + 2) : "";
+
+    return { before: "", after, reason, modifiedAt };
+  });
+}

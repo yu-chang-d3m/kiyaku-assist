@@ -110,7 +110,7 @@ function ExportPageContent() {
 
   const [articles, setArticles] = useState<ReviewArticle[]>([]);
   const [progress, setProgress] = useState<ReviewProgress | null>(null);
-  const [decisions, setDecisions] = useState<Record<string, string>>({});
+  const [decisions, setDecisions] = useState<Record<string, "adopted" | "modified" | "pending" | null>>({});
   const [memos, setMemos] = useState<Record<string, string>>({});
   const [phase, setPhase] = useState<"loading" | "no-data" | "ready">(
     "loading"
@@ -172,7 +172,7 @@ function ExportPageContent() {
           setDecisions(savedDecisions);
         } else {
           // API の decision を初期値として使用
-          const d: Record<string, string> = {};
+          const d: Record<string, "adopted" | "modified" | "pending" | null> = {};
           for (const a of articlesRes.articles) {
             if (a.id && a.decision) d[a.id] = a.decision;
           }

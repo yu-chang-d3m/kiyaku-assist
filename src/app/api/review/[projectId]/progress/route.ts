@@ -13,6 +13,8 @@ import {
 import { getReviewArticles } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
 
+export const dynamic = "force-dynamic";
+
 // ---------- ハンドラ ----------
 
 export async function GET(

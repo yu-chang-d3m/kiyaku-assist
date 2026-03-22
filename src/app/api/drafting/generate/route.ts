@@ -12,7 +12,7 @@ import * as z from "zod/v4";
 import { batchGenerateDrafts } from "@/domains/drafting/drafter";
 import type { DraftRequest } from "@/domains/drafting/types";
 import { batchRetrieve } from "@/domains/analysis/retriever";
-import { batchSaveReviewArticles } from "@/shared/db/server-actions";
+import { batchSaveReviewArticles, inferChapterFromCategory } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
 
 // ---------- Zod スキーマ ----------
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
 
             return {
               projectId,
-              chapter: 0,
+              chapter: inferChapterFromCategory(draft.category),
               articleNum: draft.articleNum,
               original: originalItem?.currentText ?? null,
               draft: draft.draft,

@@ -13,7 +13,7 @@ import { NextRequest } from "next/server";
 import * as z from "zod/v4";
 import { batchRetrieve } from "@/domains/analysis/retriever";
 import { analyzeGaps } from "@/domains/analysis/analyzer";
-import { batchSaveReviewArticles } from "@/shared/db/server-actions";
+import { batchSaveReviewArticles, inferChapterFromCategory } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
 
 /** リクエストボディのバリデーションスキーマ */
@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
         try {
           const reviewArticles = analysisResult.items.map((item) => ({
             projectId,
-            chapter: 0,
+            chapter: inferChapterFromCategory(item.category),
             articleNum: item.articleNum,
             original: item.currentText ?? null,
             draft: "",
@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
             .filter((a) => !analyzedNums.has(a.articleNum))
             .map((a) => ({
               projectId,
-              chapter: 0,
+              chapter: inferChapterFromCategory(a.category),
               articleNum: a.articleNum,
               original: a.currentText ?? null,
               draft: "",
@@ -182,8 +182,11 @@ export async function POST(request: NextRequest) {
         } catch (saveError) {
           logger.error(
             { projectId, error: saveError },
-            "分析結果の Firestore 保存に失敗（結果は SSE で返却済み）",
+            "分析結果の Firestore 保存に失敗",
           );
+          send("warning", {
+            message: "分析結果の保存に失敗しました。結果はこの画面に表示されていますが、ページを離れるとデータが失われます。",
+          });
         }
 
         send("complete", analysisResult);

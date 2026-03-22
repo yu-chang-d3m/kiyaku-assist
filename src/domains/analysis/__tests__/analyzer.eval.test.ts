@@ -83,7 +83,7 @@ describe.skipIf(!isEvalsEnabled())('Analyzer LLM 評価', () => {
       console.info(`総合:     ${result.overallScore}/5`);
       console.info(`総合評価: ${result.overallReasoning}`);
     },
-    { timeout: 60_000 }, // LLM 呼び出しのため長めのタイムアウト
+    60_000, // LLM 呼び出しのため長めのタイムアウト
   );
 
   it(
@@ -118,6 +118,6 @@ describe.skipIf(!isEvalsEnabled())('Analyzer LLM 評価', () => {
       console.info(`関連性:   ${result.relevance.score}/5`);
       console.info(`総合:     ${result.overallScore}/5`);
     },
-    { timeout: 60_000 },
+    60_000,
   );
 });

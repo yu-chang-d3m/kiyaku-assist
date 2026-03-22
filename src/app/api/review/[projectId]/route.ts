@@ -13,6 +13,8 @@ import {
 } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
 
+export const dynamic = "force-dynamic";
+
 // ---------- Zod スキーマ ----------
 
 /** PATCH リクエストボディスキーマ */
@@ -114,6 +116,7 @@ export async function PATCH(
       modificationHistory: existing.modificationHistory,
       memo: memo !== undefined ? memo : existing.memo,
       category: existing.category,
+      aiRecommendation: existing.aiRecommendation,
     };
 
     await saveReviewArticle(projectId, updated);

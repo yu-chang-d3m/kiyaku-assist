@@ -122,12 +122,24 @@ export default function AnalysisPage() {
 
     const projectId = loadProjectId() ?? `project-${Date.now()}`;
 
-    // パース済み条文を分析 API の入力形式に変換
-    const articles = parsed.articles.map((a) => ({
-      articleNum: a.articleNum,
-      category: a.chapterTitle,
-      currentText: a.body || null,
-    }));
+    // パース済み条文を分析 API の入力形式に変換（全テキストを結合）
+    const articles = parsed.articles.map((a) => {
+      const parts: string[] = [];
+      if (a.title) parts.push(`（${a.title}）`);
+      if (a.body) parts.push(a.body);
+      for (const p of a.paragraphs) {
+        parts.push(`${p.num} ${p.body}`);
+        for (const item of p.items) {
+          parts.push(`  ${item.body}`);
+        }
+      }
+      const fullText = parts.join("\n");
+      return {
+        articleNum: a.articleNum,
+        category: a.chapterTitle,
+        currentText: fullText || null,
+      };
+    });
 
     setPhase("analyzing");
     setProgressMsg("分析を準備中...");

@@ -18,8 +18,8 @@ import type {
 /** 章の検出パターン（例: "第1章 総則"、"第２章　管理組合の運営"） */
 const CHAPTER_PATTERN = /^第([０-９\d]+)章\s*(.+)$/;
 
-/** 条の検出パターン（例: "第3条（規約の遵守義務）"、"第12条 専有部分の範囲"） */
-const ARTICLE_PATTERN = /^(第[０-９\d]+条(?:の[０-９\d]+)?)\s*[（(]?([^）)]*)[）)]?\s*$/;
+/** 条の検出パターン（例: "第3条（規約の遵守義務）"、"第3条（規約の遵守義務） 本文..."、"第12条 本文..."） */
+const ARTICLE_PATTERN = /^(第[０-９\d]+条(?:の[０-９\d]+)?)\s*(?:[（(]([^）)]+)[）)]\s*)?(.*)/;
 
 /** 項番号の検出パターン（例: "２ ..."、"3 ..."） */
 const PARAGRAPH_PATTERN = /^([０-９\d]+)\s+(.+)$/;
@@ -99,7 +99,7 @@ export class TextParser implements ArticleParser {
           chapterTitle: currentChapterTitle,
           articleNum: articleMatch[1],
           title: articleMatch[2] || "",
-          body: "",
+          body: articleMatch[3]?.trim() || "",
           paragraphs: [],
         };
         continue;

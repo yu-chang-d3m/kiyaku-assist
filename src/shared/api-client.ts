@@ -16,8 +16,28 @@ import type {
 import type { ReviewEvent, ReviewProgress } from "@/domains/review/types";
 import type { ChatMessage, ChatResponse } from "@/domains/chat/types";
 import type { ReviewArticle, Project } from "@/shared/db/types";
+import { clearSession } from "@/shared/store";
 
 // ---------- 共通ヘルパー ----------
+
+/**
+ * レスポンスの共通エラーハンドリング
+ *
+ * 404 の場合はプロジェクトが削除された可能性が高いため、
+ * sessionStorage のセッションデータをクリアして stale な状態を解消する。
+ */
+async function handleResponseError(
+  res: Response,
+  fallbackMessage: string,
+): Promise<never> {
+  if (res.status === 404) {
+    clearSession();
+  }
+  const err = await res.json().catch(() => ({}));
+  throw new Error(
+    (err as { error?: string }).error ?? fallbackMessage,
+  );
+}
 
 /**
  * SSE イベントストリームをパースし、コールバックを呼び出す汎用ヘルパー
@@ -90,12 +110,7 @@ export async function callParse(text: string): Promise<ParseResult> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "パースに失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "パースに失敗しました");
   return res.json();
 }
 
@@ -111,12 +126,7 @@ export async function callParseFile(file: File): Promise<ParseResult> {
     method: "POST",
     body: formData,
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "ファイルのパースに失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "ファイルのパースに失敗しました");
   return res.json();
 }
 
@@ -158,6 +168,7 @@ export function startAnalysis(
       });
 
       if (!res.ok) {
+        if (res.status === 404) clearSession();
         const err = await res.json().catch(() => ({}));
         callbacks.onError?.(
           (err as { error?: string }).error ?? "分析の開始に失敗しました",
@@ -201,12 +212,7 @@ export async function getAnalysisResult(
   const res = await fetch(
     `/api/analysis/${encodeURIComponent(projectId)}`,
   );
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "分析結果の取得に失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "分析結果の取得に失敗しました");
   return res.json();
 }
 
@@ -266,6 +272,7 @@ export function startAutoGenerate(
       });
 
       if (!res.ok) {
+        if (res.status === 404) clearSession();
         const err = await res.json().catch(() => ({}));
         callbacks.onError?.(
           (err as { error?: string }).error ??
@@ -322,6 +329,7 @@ export function startDrafting(
       });
 
       if (!res.ok) {
+        if (res.status === 404) clearSession();
         const err = await res.json().catch(() => ({}));
         callbacks.onError?.(
           (err as { error?: string }).error ??
@@ -378,12 +386,7 @@ export async function callDraftSingle(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "ドラフト生成に失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "ドラフト生成に失敗しました");
   return res.json();
 }
 
@@ -408,12 +411,7 @@ export async function callChat(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "チャットに失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "チャットに失敗しました");
   return res.json();
 }
 
@@ -447,6 +445,7 @@ export function streamChat(
       });
 
       if (!res.ok) {
+        if (res.status === 404) clearSession();
         const err = await res.json().catch(() => ({}));
         callbacks.onError?.(
           (err as { error?: string }).error ?? "AIに接続できませんでした",
@@ -506,12 +505,7 @@ export async function callExport(request: ExportRequest): Promise<Blob> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "エクスポートに失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "エクスポートに失敗しました");
   return res.blob();
 }
 
@@ -536,13 +530,7 @@ export async function listProjects(userId: string): Promise<Project[]> {
   const res = await fetch(
     `/api/project?userId=${encodeURIComponent(userId)}`,
   );
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ??
-        "プロジェクト一覧の取得に失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "プロジェクト一覧の取得に失敗しました");
   return res.json();
 }
 
@@ -558,12 +546,7 @@ export async function createProject(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "プロジェクトの作成に失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "プロジェクトの作成に失敗しました");
   return res.json();
 }
 
@@ -573,12 +556,7 @@ export async function createProject(
  */
 export async function getProject(id: string): Promise<Project> {
   const res = await fetch(`/api/project/${encodeURIComponent(id)}`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "プロジェクトの取得に失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "プロジェクトの取得に失敗しました");
   return res.json();
 }
 
@@ -590,12 +568,7 @@ export async function deleteProjectApi(id: string): Promise<void> {
   const res = await fetch(`/api/project/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "プロジェクトの削除に失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "プロジェクトの削除に失敗しました");
 }
 
 /**
@@ -611,12 +584,7 @@ export async function updateProject(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "プロジェクトの更新に失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "プロジェクトの更新に失敗しました");
 }
 
 // ========== Review ==========
@@ -631,12 +599,7 @@ export async function getReviewArticles(
   const res = await fetch(
     `/api/review/${encodeURIComponent(projectId)}`,
   );
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "レビュー記事の取得に失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "レビュー記事の取得に失敗しました");
   return res.json();
 }
 
@@ -661,12 +624,7 @@ export async function patchReviewArticle(
       body: JSON.stringify(data),
     },
   );
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "レビュー記事の更新に失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "レビュー記事の更新に失敗しました");
 }
 
 /** 決定イベント適用結果 */
@@ -695,13 +653,7 @@ export async function decideReview(
       body: JSON.stringify({ articleNum, event }),
     },
   );
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ??
-        "レビュー決定の適用に失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "レビュー決定の適用に失敗しました");
   return res.json();
 }
 
@@ -715,11 +667,6 @@ export async function getReviewProgress(
   const res = await fetch(
     `/api/review/${encodeURIComponent(projectId)}/progress`,
   );
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(
-      (err as { error?: string }).error ?? "レビュー進捗の取得に失敗しました",
-    );
-  }
+  if (!res.ok) await handleResponseError(res, "レビュー進捗の取得に失敗しました");
   return res.json();
 }

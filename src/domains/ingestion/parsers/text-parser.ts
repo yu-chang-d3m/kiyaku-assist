@@ -15,17 +15,31 @@ import type {
 
 // ---------- 正規表現パターン ----------
 
-/** 章の検出パターン（例: "第1章 総則"、"第２章　管理組合の運営"） */
-const CHAPTER_PATTERN = /^第([０-９\d]+)章\s*(.+)$/;
+/**
+ * 章の検出パターン（例: "第1章 総則"、"第２章　管理組合の運営"）
+ * PDF 抽出テキストでは字間スペースが入る場合がある（"第 ２ 章"、"第 １ ０ 章"）ため、
+ * 「第」と数字と「章」の間にオプショナルなスペースを許容する。
+ * 2桁数字は `１ ０` のようにスペースで区切られる場合があるため、数字+空白の繰り返しで対応。
+ */
+const CHAPTER_PATTERN = /^第\s*([０-９\d](?:\s*[０-９\d])*)\s*章\s*(.+)$/;
 
-/** 条の検出パターン（例: "第3条（規約の遵守義務）"、"第3条（規約の遵守義務） 本文..."、"第12条 本文..."） */
-const ARTICLE_PATTERN = /^(第[０-９\d]+条(?:の[０-９\d]+)?)\s*(?:[（(]([^）)]+)[）)]\s*)?(.*)/;
+/**
+ * 条の検出パターン（例: "第3条（規約の遵守義務）"、"第12条 本文..."）
+ * 字間スペース対応: 「第 3 条」「第 1 2 条 の 2」等にもマッチ。
+ * キャプチャグループ内のスペースは後で除去して正規化する。
+ */
+const ARTICLE_PATTERN = /^(第\s*[０-９\d](?:\s*[０-９\d])*\s*条(?:\s*の\s*[０-９\d](?:\s*[０-９\d])*)?)\s*(?:[（(]([^）)]+)[）)]\s*)?(.*)/;
 
 /** 項番号の検出パターン（例: "２ ..."、"3 ..."） */
 const PARAGRAPH_PATTERN = /^([０-９\d]+)\s+(.+)$/;
 
 /** 号の検出パターン（例: "一 ..."、"(1) ..."、"① ..."） */
 const ITEM_PATTERN = /^(?:([一二三四五六七八九十]+)|[（(]([０-９\d]+)[）)]|([①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]))\s+(.+)$/;
+
+/** 条番号文字列からスペースを除去して正規化 */
+function normalizeArticleNumStr(raw: string): string {
+  return raw.replace(/\s+/g, "");
+}
 
 // ---------- ユーティリティ ----------
 
@@ -97,7 +111,7 @@ export class TextParser implements ArticleParser {
         currentArticle = {
           chapter: currentChapter,
           chapterTitle: currentChapterTitle,
-          articleNum: articleMatch[1],
+          articleNum: normalizeArticleNumStr(articleMatch[1]),
           title: articleMatch[2] || "",
           body: articleMatch[3]?.trim() || "",
           paragraphs: [],

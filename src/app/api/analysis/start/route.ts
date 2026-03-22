@@ -63,10 +63,24 @@ export async function POST(request: NextRequest) {
     async start(controller) {
       const encoder = new TextEncoder();
       const send = (event: string, data: unknown) => {
-        controller.enqueue(
-          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
-        );
+        try {
+          controller.enqueue(
+            encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+          );
+        } catch {
+          // controller が閉じている場合は無視
+        }
       };
+
+      // SSE keepalive: 15秒ごとにコメントを送信して接続維持
+      // （大量の条文を分析する場合、数分かかるため必須）
+      const keepalive = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(": keepalive\n\n"));
+        } catch {
+          clearInterval(keepalive);
+        }
+      }, 15_000);
 
       try {
         const total = articles.length;
@@ -182,6 +196,7 @@ export async function POST(request: NextRequest) {
               : "不明なエラーが発生しました",
         });
       } finally {
+        clearInterval(keepalive);
         controller.close();
       }
     },

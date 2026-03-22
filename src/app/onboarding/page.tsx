@@ -22,6 +22,7 @@ import { Progress } from "@/components/ui/progress";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
 import { saveOnboarding } from "@/shared/store";
+import { AuthGuard } from "@/shared/auth/auth-guard";
 import { cn } from "@/lib/utils";
 
 // ---------- 質問定義 ----------
@@ -113,6 +114,7 @@ export default function OnboardingPage() {
   }
 
   return (
+    <AuthGuard>
     <div className="flex flex-col min-h-screen">
       <AppHeader currentStep="onboarding" />
 
@@ -189,5 +191,6 @@ export default function OnboardingPage() {
 
       <AppFooter />
     </div>
+    </AuthGuard>
   );
 }

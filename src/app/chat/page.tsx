@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/shared/auth/auth-context";
 import { streamChat } from "@/shared/api-client";
 import { loadProjectId } from "@/shared/store";
+import { AuthGuard } from "@/shared/auth/auth-guard";
 
 // ---------- 型定義 ----------
 
@@ -48,6 +49,10 @@ const GUARDRAIL_WARNING =
 // ---------- コンポーネント ----------
 
 export default function ChatPage() {
+  return <AuthGuard><ChatPageContent /></AuthGuard>;
+}
+
+function ChatPageContent() {
   const { user } = useAuth();
 
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -208,12 +213,21 @@ export default function ChatPage() {
 
       {/* ナビゲーションリンク */}
       <div className="max-w-3xl mx-auto w-full px-4 py-2">
-        <Link
-          href="/review"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          &larr; レビューに戻る
-        </Link>
+        {loadProjectId() ? (
+          <Link
+            href="/review"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            &larr; レビューに戻る
+          </Link>
+        ) : (
+          <Link
+            href="/"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            &larr; ホームに戻る
+          </Link>
+        )}
       </div>
 
       {/* メッセージ一覧 */}

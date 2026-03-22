@@ -6,7 +6,6 @@
  * TextParser と同じ構造化パイプラインに渡す。
  */
 
-import { PDFParse } from "pdf-parse";
 import type { ArticleParser, ParseResult } from "@/domains/ingestion/types";
 import { TextParser } from "./text-parser";
 
@@ -150,6 +149,9 @@ export class PdfParser implements ArticleParser {
 
   /** Buffer から直接パースする（API ルートから呼ばれる） */
   async parseBuffer(buffer: Buffer): Promise<ParseResult> {
+    // pdf-parse は pdfjs-dist 経由で DOMMatrix を参照するため、動的インポートで遅延ロードする。
+    // Node.js (Cloud Run) 環境には DOMMatrix が存在しないため、static import だとモジュール初期化時にクラッシュする。
+    const { PDFParse } = await import("pdf-parse");
     const pdf = new PDFParse({ data: new Uint8Array(buffer) });
 
     try {

@@ -17,6 +17,7 @@ import { getReviewArticles, patchReviewArticle, decideReview, callDraftSingle } 
 import type { ReviewArticle } from "@/shared/db/types";
 import type { GapAnalysisItem } from "@/domains/analysis/types";
 import { useProjectStore, loadProjectId, loadGapResults, saveReviewDecisions, loadReviewDecisions, saveReviewMemos, loadReviewMemos } from "@/shared/store";
+import { AuthGuard } from "@/shared/auth/auth-guard";
 
 // ---------- 定数・ユーティリティ ----------
 const IMPORTANCE_LABEL: Record<string, string> = { mandatory: "法的必須", recommended: "推奨", optional: "任意" };
@@ -66,6 +67,10 @@ const Spinner = ({ className = "w-4 h-4" }: { className?: string }) => (
 
 // ---------- メインコンポーネント ----------
 export default function ReviewPage() {
+  return <AuthGuard><ReviewPageContent /></AuthGuard>;
+}
+
+function ReviewPageContent() {
   const router = useRouter();
   const { user } = useAuth();
 

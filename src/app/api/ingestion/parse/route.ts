@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as z from "zod/v4";
 import { normalizeParseResult } from "@/domains/ingestion/normalizer";
-import { TextParser } from "@/domains/ingestion/parsers";
+import { TextParser } from "@/domains/ingestion/parsers/text-parser";
 import { logger } from "@/shared/observability/logger";
 
 /** リクエストボディのバリデーションスキーマ */

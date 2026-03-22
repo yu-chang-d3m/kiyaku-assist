@@ -23,6 +23,7 @@ import { AppFooter } from "@/components/layout/app-footer";
 import { callParse, callParseFile } from "@/shared/api-client";
 import type { ParseResult } from "@/domains/ingestion/types";
 import { saveParsedBylaws } from "@/shared/store";
+import { AuthGuard } from "@/shared/auth/auth-guard";
 import { cn } from "@/lib/utils";
 
 // ---------- ファイル形式判定 ----------
@@ -196,6 +197,10 @@ function groupByChapter(result: ParseResult): ChapterGroup[] {
 // ---------- コンポーネント ----------
 
 export default function UploadPage() {
+  return <AuthGuard><UploadPageContent /></AuthGuard>;
+}
+
+function UploadPageContent() {
   const router = useRouter();
   const [state, setState] = useState<UploadState>("idle");
   const [file, setFile] = useState<File | null>(null);

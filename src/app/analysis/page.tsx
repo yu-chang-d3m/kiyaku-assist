@@ -32,6 +32,7 @@ import {
   loadOnboarding,
 } from "@/shared/store";
 import { cn } from "@/lib/utils";
+import { AuthGuard } from "@/shared/auth/auth-guard";
 import type { GapAnalysisItem, GapType, AnalysisResult } from "@/domains/analysis/types";
 
 // ---------- 表示用定数 ----------
@@ -79,6 +80,10 @@ type AnalysisPhase = "loading" | "ready" | "analyzing" | "drafting" | "done" | "
 // ---------- コンポーネント ----------
 
 export default function AnalysisPage() {
+  return <AuthGuard><AnalysisPageContent /></AuthGuard>;
+}
+
+function AnalysisPageContent() {
   const router = useRouter();
   const [phase, setPhase] = useState<AnalysisPhase>("loading");
   const [filter, setFilter] = useState<FilterStatus>("all");

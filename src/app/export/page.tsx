@@ -41,6 +41,7 @@ import {
   loadReviewDecisions,
   loadReviewMemos,
 } from "@/shared/store";
+import { AuthGuard } from "@/shared/auth/auth-guard";
 
 // ---------- 型定義 ----------
 
@@ -101,6 +102,10 @@ function downloadBlob(blob: Blob, filename: string): void {
 // ---------- コンポーネント ----------
 
 export default function ExportPage() {
+  return <AuthGuard><ExportPageContent /></AuthGuard>;
+}
+
+function ExportPageContent() {
   const { user } = useAuth();
 
   const [articles, setArticles] = useState<ReviewArticle[]>([]);
@@ -243,7 +248,7 @@ export default function ExportPage() {
   if (phase === "loading") {
     return (
       <div className="flex flex-col min-h-screen">
-        <AppHeader currentStep={"export" as StepId} />
+        <AppHeader showProgress={false} />
         <main className="flex-1 flex items-center justify-center px-4 py-8">
           <Card className="max-w-md w-full">
             <CardContent className="py-8 text-center space-y-4">
@@ -284,7 +289,7 @@ export default function ExportPage() {
   if (phase === "no-data") {
     return (
       <div className="flex flex-col min-h-screen">
-        <AppHeader currentStep={"export" as StepId} />
+        <AppHeader showProgress={false} />
         <main className="flex-1 flex items-center justify-center px-4 py-8">
           <Card className="max-w-md w-full">
             <CardContent className="py-8 text-center space-y-4">

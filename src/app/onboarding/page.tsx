@@ -3,14 +3,13 @@
 /**
  * オンボーディングページ — 初回ヒアリング
  *
- * 4問の質問を1問ずつ表示し、マンションの基本情報を収集する。
- * 回答はストアに保存し、完了後は /guide へ遷移する。
+ * 5問の質問を1問ずつ表示し、マンションの基本情報を収集する。
+ * 回答をもとに Firestore にプロジェクトを作成し、projectId を保存してから /guide へ遷移する。
  *
- * v1 からの改善点:
- * - StepId が文字列ベースに移行（currentStep="onboarding"）
- * - import パスを v2 の @/shared/* に統一
- * - プログレスバーを追加（Progress コンポーネント使用）
- * - 要件に合わせた選択肢の value マッピング
+ * v2.2 改善:
+ * - condoName（マンション名）質問を追加
+ * - createProject() でプロジェクトを Firestore に永続化
+ * - saveProjectId() でセッションに projectId を保持
  */
 
 import { useState } from "react";
@@ -21,18 +20,38 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
-import { saveOnboarding } from "@/shared/store";
+import { saveOnboarding, saveProjectId } from "@/shared/store";
+import { createProject } from "@/shared/api-client";
+import { useAuth } from "@/shared/auth/auth-context";
 import { AuthGuard } from "@/shared/auth/auth-guard";
 import { cn } from "@/lib/utils";
 
 // ---------- 質問定義 ----------
 
-const ONBOARDING_QUESTIONS = [
+interface OnboardingQuestion {
+  id: string;
+  question: string;
+  description: string;
+  type: "select" | "text";
+  options?: readonly { value: string; label: string }[];
+  placeholder?: string;
+}
+
+const ONBOARDING_QUESTIONS: readonly OnboardingQuestion[] = [
+  {
+    id: "condoName",
+    question: "マンション名を教えてください",
+    description:
+      "プロジェクトの識別用に使います。正式名称でなくても構いません。",
+    type: "text",
+    placeholder: "例: ○○マンション",
+  },
   {
     id: "unitCount",
     question: "マンションの戸数はどのくらいですか？",
     description:
       "おおよその目安で構いません。規約の規模感を把握するためにお聞きします。",
+    type: "select",
     options: [
       { value: "small", label: "〜30戸" },
       { value: "medium", label: "31〜100戸" },
@@ -45,6 +64,7 @@ const ONBOARDING_QUESTIONS = [
     question: "管理組合は法人化していますか？",
     description:
       "法人格の有無によって規約の内容が一部異なります。わからない場合は「わからない」を選んでください。",
+    type: "select",
     options: [
       { value: "corporate", label: "はい（管理組合法人）" },
       { value: "non-corporate", label: "いいえ（権利能力なき社団）" },
@@ -55,6 +75,7 @@ const ONBOARDING_QUESTIONS = [
     id: "hasCurrentRules",
     question: "現行の管理規約はお手元にありますか？",
     description: "PDF、Word、紙のいずれかの形式であれば大丈夫です。",
+    type: "select",
     options: [
       { value: "yes", label: "はい（データまたは紙がある）" },
       { value: "no", label: "いいえ（手元にない）" },
@@ -65,6 +86,7 @@ const ONBOARDING_QUESTIONS = [
     question: "総会の予定時期は？",
     description:
       "2026年4月1日以降の総会で改正する場合は、緩和された決議要件が使えるためおすすめです。",
+    type: "select",
     options: [
       { value: "within3months", label: "3ヶ月以内" },
       { value: "3to6months", label: "3〜6ヶ月" },
@@ -74,33 +96,76 @@ const ONBOARDING_QUESTIONS = [
   },
 ] as const;
 
-type AnswerKey = (typeof ONBOARDING_QUESTIONS)[number]["id"];
-type Answers = Partial<Record<AnswerKey, string>>;
+type Answers = Record<string, string>;
 
 // ---------- コンポーネント ----------
 
 export default function OnboardingPage() {
+  return (
+    <AuthGuard>
+      <OnboardingPageContent />
+    </AuthGuard>
+  );
+}
+
+function OnboardingPageContent() {
   const router = useRouter();
+  const { user } = useAuth();
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   const question = ONBOARDING_QUESTIONS[currentQ];
   const totalQ = ONBOARDING_QUESTIONS.length;
   const isLast = currentQ === totalQ - 1;
-  const selectedValue = answers[question.id];
+  const selectedValue = answers[question.id] ?? "";
   const progressPercent = ((currentQ + 1) / totalQ) * 100;
+  const canProceed = question.type === "text" ? selectedValue.trim().length > 0 : Boolean(selectedValue);
 
   /** 選択肢をクリックしたとき */
   function handleSelect(value: string) {
     setAnswers((prev) => ({ ...prev, [question.id]: value }));
   }
 
+  /** テキスト入力の変更 */
+  function handleTextChange(value: string) {
+    setAnswers((prev) => ({ ...prev, [question.id]: value }));
+  }
+
   /** 「次へ」または「始める」ボタン */
-  function handleNext() {
+  async function handleNext() {
     if (isLast) {
-      // ストアに保存して /guide へ遷移
-      saveOnboarding(answers as Record<string, string>);
-      router.push("/guide");
+      setSubmitting(true);
+      setError("");
+      try {
+        // ストアにオンボーディング回答を保存
+        saveOnboarding(answers);
+
+        // Firestore にプロジェクトを作成
+        const userId = user?.uid ?? `demo-${Date.now()}`;
+        const { id } = await createProject({
+          userId,
+          condoName: answers.condoName ?? "マンション",
+          condoType: (answers.isCorporate ?? "unknown") as "corporate" | "non-corporate" | "unknown",
+          unitCount: (answers.unitCount ?? "medium") as "small" | "medium" | "large" | "xlarge",
+          targetTiming: answers.schedule ?? "undecided",
+          hasCurrentRules: answers.hasCurrentRules === "yes",
+          currentStep: 0,
+        });
+
+        // projectId をセッションに保存
+        saveProjectId(id);
+
+        router.push("/guide");
+      } catch (err) {
+        console.error("プロジェクト作成に失敗:", err);
+        setError(
+          err instanceof Error ? err.message : "プロジェクトの作成に失敗しました。もう一度お試しください。",
+        );
+      } finally {
+        setSubmitting(false);
+      }
     } else {
       setCurrentQ((prev) => prev + 1);
     }
@@ -114,7 +179,6 @@ export default function OnboardingPage() {
   }
 
   return (
-    <AuthGuard>
     <div className="flex flex-col min-h-screen">
       <AppHeader currentStep="onboarding" />
 
@@ -139,8 +203,22 @@ export default function OnboardingPage() {
           </CardHeader>
 
           <CardContent className="space-y-3">
+            {/* テキスト入力 */}
+            {question.type === "text" && (
+              <input
+                type="text"
+                value={selectedValue}
+                onChange={(e) => handleTextChange(e.target.value)}
+                placeholder={question.placeholder}
+                className="w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && canProceed) handleNext();
+                }}
+              />
+            )}
+
             {/* 選択肢 */}
-            {question.options.map((option) => (
+            {question.type === "select" && question.options?.map((option) => (
               <button
                 key={option.value}
                 onClick={() => handleSelect(option.value)}
@@ -167,22 +245,29 @@ export default function OnboardingPage() {
               </div>
             )}
 
+            {/* エラー表示 */}
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
+
             {/* ナビゲーションボタン */}
             <div className="flex gap-3 pt-4">
               <Button
                 variant="outline"
                 onClick={handleBack}
-                disabled={currentQ === 0}
+                disabled={currentQ === 0 || submitting}
                 className="flex-1"
               >
                 前へ
               </Button>
               <Button
                 onClick={handleNext}
-                disabled={!selectedValue}
+                disabled={!canProceed || submitting}
                 className="flex-1"
               >
-                {isLast ? "始める" : "次へ"}
+                {submitting ? "作成中..." : isLast ? "始める" : "次へ"}
               </Button>
             </div>
           </CardContent>
@@ -191,6 +276,5 @@ export default function OnboardingPage() {
 
       <AppFooter />
     </div>
-    </AuthGuard>
   );
 }

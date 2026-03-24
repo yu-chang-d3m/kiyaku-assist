@@ -23,12 +23,13 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
-import { startAnalysis, startAutoGenerate } from "@/shared/api-client";
+import { startAnalysis, startAutoGenerate, loadParsedBylawsRemote } from "@/shared/api-client";
 import {
   loadParsedBylaws,
   saveGapResults,
   loadGapResults,
   loadProjectId,
+  saveProjectId,
   loadOnboarding,
 } from "@/shared/store";
 import { cn } from "@/lib/utils";
@@ -99,22 +100,43 @@ function AnalysisPageContent() {
 
   /** パース済みデータの存在チェック + キャッシュ済み結果の読み込み */
   useEffect(() => {
-    const parsed = loadParsedBylaws();
-    if (!parsed) {
-      router.push("/upload");
-      return;
-    }
+    (async () => {
+      let parsed = loadParsedBylaws();
 
-    // 既にストアに分析結果がある場合はそれを使う
-    const cached = loadGapResults();
-    if (cached && cached.length > 0) {
-      setResults(cached);
-      setPhase("done");
-      return;
-    }
+      // sessionStorage にない場合は Firestore からフォールバック取得
+      if (!parsed) {
+        const pid = loadProjectId();
+        if (pid) {
+          try {
+            const remote = await loadParsedBylawsRemote(pid);
+            if (remote) {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports -- dynamic import
+              const { saveParsedBylaws: savePB } = await import("@/shared/store");
+              savePB(remote);
+              parsed = remote;
+            }
+          } catch {
+            // Firestore 取得に失敗 → パースなし扱い
+          }
+        }
+      }
 
-    // データはあるが分析未実施 → 準備完了
-    setPhase("ready");
+      if (!parsed) {
+        router.push("/upload");
+        return;
+      }
+
+      // 既にストアに分析結果がある場合はそれを使う
+      const cached = loadGapResults();
+      if (cached && cached.length > 0) {
+        setResults(cached);
+        setPhase("done");
+        return;
+      }
+
+      // データはあるが分析未実施 → 準備完了
+      setPhase("ready");
+    })();
   }, [router]);
 
   /** 分析を開始する */
@@ -125,7 +147,12 @@ function AnalysisPageContent() {
       return;
     }
 
-    const projectId = loadProjectId() ?? `project-${Date.now()}`;
+    // projectId がない場合は一時 ID を作成し、必ず sessionStorage に保存
+    let projectId = loadProjectId();
+    if (!projectId) {
+      projectId = `project-${Date.now()}`;
+      saveProjectId(projectId);
+    }
 
     // パース済み条文を分析 API の入力形式に変換（全テキストを結合）
     const articles = parsed.articles.map((a) => {
@@ -170,7 +197,8 @@ function AnalysisPageContent() {
     });
 
     controllerRef.current = controller;
-  }, [router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- handleStartDrafting is stable via ref pattern below
+  }, [router, draftMode]);
 
   /** 自動ドラフト生成を開始する */
   const handleStartDrafting = useCallback((pid: string) => {
@@ -182,7 +210,7 @@ function AnalysisPageContent() {
     const onboarding = loadOnboarding();
     const condoContext = {
       condoName: onboarding?.condoName ?? "マンション",
-      condoType: (onboarding?.condoType ?? "unknown") as "corporate" | "non-corporate" | "unknown",
+      condoType: (onboarding?.isCorporate ?? "unknown") as "corporate" | "non-corporate" | "unknown",
       unitCount: (onboarding?.unitCount ?? "medium") as "small" | "medium" | "large" | "xlarge",
     };
 

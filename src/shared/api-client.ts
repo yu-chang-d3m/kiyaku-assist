@@ -587,6 +587,42 @@ export async function updateProject(
   if (!res.ok) await handleResponseError(res, "プロジェクトの更新に失敗しました");
 }
 
+// ========== Parsed Bylaws ==========
+
+/**
+ * POST /api/project/[id]/parsed-bylaws
+ * パース結果を Firestore に保存する
+ */
+export async function saveParsedBylawsRemote(
+  projectId: string,
+  data: ParseResult,
+): Promise<void> {
+  const res = await fetch(
+    `/api/project/${encodeURIComponent(projectId)}/parsed-bylaws`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data }),
+    },
+  );
+  if (!res.ok) await handleResponseError(res, "パース結果の保存に失敗しました");
+}
+
+/**
+ * GET /api/project/[id]/parsed-bylaws
+ * Firestore からパース結果を取得する
+ */
+export async function loadParsedBylawsRemote(
+  projectId: string,
+): Promise<ParseResult | null> {
+  const res = await fetch(
+    `/api/project/${encodeURIComponent(projectId)}/parsed-bylaws`,
+  );
+  if (!res.ok) await handleResponseError(res, "パース結果の取得に失敗しました");
+  const json = await res.json();
+  return json.data ?? null;
+}
+
 // ========== Review ==========
 
 /**

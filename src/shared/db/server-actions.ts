@@ -133,6 +133,52 @@ export async function deleteProject(projectId: string): Promise<void> {
   await db.collection("projects").doc(projectId).delete();
 }
 
+// ---------- パース結果の永続化 ----------
+
+/**
+ * パース結果を Firestore に保存する
+ * projects/{projectId}/metadata/parsedBylaws にドキュメントとして保存
+ */
+export async function saveParsedBylawsToFirestore(
+  projectId: string,
+  parsedBylaws: unknown,
+): Promise<void> {
+  const db = getAdminDb();
+  await db
+    .collection("projects")
+    .doc(projectId)
+    .collection("metadata")
+    .doc("parsedBylaws")
+    .set({
+      data: JSON.stringify(parsedBylaws),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+}
+
+/**
+ * Firestore からパース結果を取得する
+ */
+export async function loadParsedBylawsFromFirestore(
+  projectId: string,
+): Promise<unknown | null> {
+  const db = getAdminDb();
+  const snap = await db
+    .collection("projects")
+    .doc(projectId)
+    .collection("metadata")
+    .doc("parsedBylaws")
+    .get();
+
+  if (!snap.exists) return null;
+  const raw = snap.data()?.data;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw as string);
+  } catch {
+    return null;
+  }
+}
+
 // ---------- レビュー記事 CRUD ----------
 
 /**

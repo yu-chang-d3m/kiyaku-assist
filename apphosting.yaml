@@ -4,6 +4,8 @@ runConfig:
   minInstances: 0
   cpu: 1
   memoryMiB: 512
+  # SSE 長時間処理（分析・ドラフト生成）のタイムアウト: 10分
+  maxRequestTimeoutSeconds: 600
 
 env:
   - variable: ANTHROPIC_API_KEY
@@ -20,3 +22,10 @@ env:
     value: "807666334374"
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
     value: 1:807666334374:web:52f176553ffef9bc01d267
+  # Vertex AI Search（RAG 検索）
+  - variable: GCP_PROJECT_ID
+    value: kiyaku-assist
+  - variable: VERTEX_AI_SEARCH_DATASTORE_ID
+    value: standard-rules-ds
+  - variable: GCP_LOCATION
+    value: global

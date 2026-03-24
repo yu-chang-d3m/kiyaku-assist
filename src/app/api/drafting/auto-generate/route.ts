@@ -21,8 +21,8 @@ import * as z from "zod/v4";
 import {
   getReviewArticles,
   batchSaveReviewArticles,
-  inferChapterFromCategory,
 } from "@/shared/db/server-actions";
+import { inferChapterFromCategory } from "@/shared/db/chapter-utils";
 import { retrieveRelatedStandards } from "@/domains/analysis/retriever";
 import { generateDraftsWithStrategy } from "@/domains/drafting/drafter";
 import type { DraftRequest } from "@/domains/drafting/types";

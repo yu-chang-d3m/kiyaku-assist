@@ -13,7 +13,8 @@ import { NextRequest } from "next/server";
 import * as z from "zod/v4";
 import { batchRetrieve } from "@/domains/analysis/retriever";
 import { analyzeGaps } from "@/domains/analysis/analyzer";
-import { batchSaveReviewArticles, inferChapterFromCategory } from "@/shared/db/server-actions";
+import { batchSaveReviewArticles } from "@/shared/db/server-actions";
+import { inferChapterFromCategory } from "@/shared/db/chapter-utils";
 import { logger } from "@/shared/observability/logger";
 
 /** リクエストボディのバリデーションスキーマ */

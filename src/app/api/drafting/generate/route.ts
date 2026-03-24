@@ -12,7 +12,8 @@ import * as z from "zod/v4";
 import { batchGenerateDrafts } from "@/domains/drafting/drafter";
 import type { DraftRequest } from "@/domains/drafting/types";
 import { batchRetrieve } from "@/domains/analysis/retriever";
-import { batchSaveReviewArticles, inferChapterFromCategory } from "@/shared/db/server-actions";
+import { batchSaveReviewArticles } from "@/shared/db/server-actions";
+import { inferChapterFromCategory } from "@/shared/db/chapter-utils";
 import { logger } from "@/shared/observability/logger";
 
 // ---------- Zod スキーマ ----------

@@ -105,25 +105,34 @@ function ReviewPageContent() {
     try {
       const pid = loadProjectId() ?? "default";
       let fetched: ReviewArticle[] = (await getReviewArticles(pid)).articles ?? [];
-      if (fetched.length === 0) {
+      const fromFirestore = fetched.length > 0;
+
+      if (!fromFirestore) {
+        // Firestore にデータがない場合のみ sessionStorage をフォールバック
         const gap = loadGapResults();
         if (gap && gap.length > 0) fetched = gapToReview(gap, pid);
         else { router.push("/analysis"); return; }
       }
       setArticles(fetched);
-      const sd = loadReviewDecisions();
-      if (sd && Object.keys(sd).length > 0) { setDecisions(sd); }
-      else {
-        const init: Record<string, Decision | null> = {};
-        for (const a of fetched) if (a.id && a.decision) init[a.id] = a.decision;
-        setDecisions(init);
-      }
-      const sm = loadReviewMemos();
-      if (sm && Object.keys(sm).length > 0) { setMemos(sm); }
-      else {
-        const init: Record<string, string> = {};
-        for (const a of fetched) if (a.id && a.memo) init[a.id] = a.memo;
-        setMemos(init);
+
+      // Firestore から取得した場合は Firestore の decision/memo を正とする
+      // sessionStorage はフォールバック（Firestore が空の場合）でのみ使用
+      if (fromFirestore) {
+        const initD: Record<string, Decision> = {};
+        const initM: Record<string, string> = {};
+        for (const a of fetched) {
+          if (a.id && a.decision) initD[a.id] = a.decision;
+          if (a.id && a.memo) initM[a.id] = a.memo;
+        }
+        setDecisions(initD);
+        saveReviewDecisions(initD);
+        setMemos(initM);
+        saveReviewMemos(initM);
+      } else {
+        const sd = loadReviewDecisions();
+        if (sd && Object.keys(sd).length > 0) { setDecisions(sd); }
+        const sm = loadReviewMemos();
+        if (sm && Object.keys(sm).length > 0) { setMemos(sm); }
       }
       setPhase("ready");
     } catch (err) {

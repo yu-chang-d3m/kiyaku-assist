@@ -203,7 +203,7 @@ interface BatchGapAnalysisOutput {
 }
 
 /** バッチサイズ（1回の API 呼び出しで分析する条文数） */
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 5;
 
 // ---------- バッチ分析 ----------
 
@@ -274,7 +274,7 @@ articleNum は入力と完全に一致する値を返してください。`;
     system: systemPrompt,
     userMessage: userPrompt,
     tool: BATCH_GAP_ANALYSIS_TOOL,
-    maxTokens: 8192,
+    maxTokens: 16384,
   });
 
   // 結果をマッピング

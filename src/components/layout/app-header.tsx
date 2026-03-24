@@ -5,20 +5,19 @@
  *
  * - アプリ名（ホームへのリンク）
  * - 「AIに質問」リンク
+ * - 設定メニュー（データ管理）
  * - 認証状態に応じたログイン/ログアウト表示
  * - オプションでジャーニー進捗バーを表示
- *
- * v1 からの改善:
- * - StepId が文字列ベースに変更（数値から移行）
- * - import パスを @/shared/auth/auth-context, @/shared/journey に統一
  */
 
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/shared/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { type StepId } from "@/shared/journey";
 import { JourneyProgress } from "./journey-progress";
-import { LogOut, LogIn } from "lucide-react";
+import { LogOut, LogIn, Settings, Trash2, Database } from "lucide-react";
+import { clearAiCache, clearAllData } from "@/shared/api-client";
 
 interface AppHeaderProps {
   /** 現在のステップ ID（進捗バーのハイライトに使用） */
@@ -36,6 +35,109 @@ function UserAvatar({ name }: { name: string | null }) {
     <span className="flex items-center justify-center size-8 rounded-full bg-primary text-primary-foreground text-sm font-medium">
       {initial}
     </span>
+  );
+}
+
+/**
+ * 設定メニュー（ドロップダウン）
+ */
+function SettingsMenu() {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // 外側クリックで閉じる
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const handleClearCache = useCallback(async () => {
+    if (!confirm("AI キャッシュを削除しますか？\n次回の分析時に再生成されます。")) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const res = await clearAiCache();
+      setMessage(`キャッシュ ${res.deleted} 件を削除しました`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "削除に失敗しました");
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const handleClearAll = useCallback(async () => {
+    if (!confirm("全プロジェクトデータと AI キャッシュを削除しますか？\nこの操作は取り消せません。")) return;
+    if (!confirm("本当に全データを削除してよろしいですか？")) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const res = await clearAllData();
+      setMessage(`プロジェクト ${res.deletedProjects} 件、キャッシュ ${res.deletedCache} 件を削除しました`);
+      // sessionStorage もクリア
+      if (typeof window !== "undefined") sessionStorage.clear();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "削除に失敗しました");
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => { setOpen((prev) => !prev); setMessage(""); }}
+        className="size-8 text-muted-foreground hover:text-foreground"
+        aria-label="設定"
+      >
+        <Settings className="size-4" />
+      </Button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-64 bg-background border rounded-lg shadow-lg p-2 z-50">
+          <p className="text-xs font-medium text-muted-foreground px-2 py-1 mb-1">データ管理</p>
+
+          <button
+            onClick={handleClearCache}
+            disabled={busy}
+            className="flex items-center gap-2 w-full px-2 py-2 text-sm rounded-md hover:bg-muted transition-colors text-left disabled:opacity-50"
+          >
+            <Database className="size-4 text-muted-foreground shrink-0" />
+            <div>
+              <p className="font-medium">AI キャッシュを削除</p>
+              <p className="text-xs text-muted-foreground">分析・ドラフトのキャッシュをクリア</p>
+            </div>
+          </button>
+
+          <button
+            onClick={handleClearAll}
+            disabled={busy}
+            className="flex items-center gap-2 w-full px-2 py-2 text-sm rounded-md hover:bg-destructive/10 transition-colors text-left disabled:opacity-50"
+          >
+            <Trash2 className="size-4 text-destructive shrink-0" />
+            <div>
+              <p className="font-medium text-destructive">全データを削除</p>
+              <p className="text-xs text-muted-foreground">プロジェクト + キャッシュを全削除</p>
+            </div>
+          </button>
+
+          {message && (
+            <p className="text-xs px-2 py-1.5 mt-1 text-muted-foreground bg-muted rounded">
+              {message}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -69,6 +171,9 @@ export function AppHeader({ currentStep, showProgress = true }: AppHeaderProps) 
             AIに質問
           </Link>
 
+          {/* 設定メニュー */}
+          <SettingsMenu />
+
           {/* 認証状態に応じた表示 */}
           {configured && user && (
             <div className="flex items-center gap-2">
@@ -97,7 +202,6 @@ export function AppHeader({ currentStep, showProgress = true }: AppHeaderProps) 
               </Link>
             </Button>
           )}
-          {/* Firebase 未設定時は認証関連 UI を表示しない（デモモード） */}
         </div>
       </div>
       {showProgress && currentStep && <JourneyProgress currentStep={currentStep} />}

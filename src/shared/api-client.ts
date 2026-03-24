@@ -706,3 +706,28 @@ export async function getReviewProgress(
   if (!res.ok) await handleResponseError(res, "レビュー進捗の取得に失敗しました");
   return res.json();
 }
+
+// ========== Admin ==========
+
+/**
+ * DELETE /api/admin/clear-cache
+ * AI キャッシュを全件削除する
+ */
+export async function clearAiCache(): Promise<{ deleted: number }> {
+  const res = await fetch("/api/admin/clear-cache", { method: "DELETE" });
+  if (!res.ok) await handleResponseError(res, "AI キャッシュの削除に失敗しました");
+  return res.json();
+}
+
+/**
+ * DELETE /api/admin/clear-data
+ * 全プロジェクトデータ + AI キャッシュを削除する
+ */
+export async function clearAllData(): Promise<{
+  deletedProjects: number;
+  deletedCache: number;
+}> {
+  const res = await fetch("/api/admin/clear-data", { method: "DELETE" });
+  if (!res.ok) await handleResponseError(res, "全データの削除に失敗しました");
+  return res.json();
+}

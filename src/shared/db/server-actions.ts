@@ -179,6 +179,58 @@ export async function loadParsedBylawsFromFirestore(
   }
 }
 
+// ---------- 管理操作 ----------
+
+/**
+ * AI キャッシュ（aiCache コレクション）を全件削除する
+ */
+export async function clearAiCache(): Promise<number> {
+  const db = getAdminDb();
+  const snap = await db.collection("aiCache").get();
+  if (snap.empty) return 0;
+
+  const BATCH_LIMIT = 500;
+  for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
+    const chunk = snap.docs.slice(i, i + BATCH_LIMIT);
+    const batch = db.batch();
+    for (const doc of chunk) batch.delete(doc.ref);
+    await batch.commit();
+  }
+  return snap.size;
+}
+
+/**
+ * 全プロジェクトとそのサブコレクションを削除する
+ */
+export async function clearAllProjects(): Promise<number> {
+  const db = getAdminDb();
+  const snap = await db.collection("projects").get();
+  if (snap.empty) return 0;
+
+  const BATCH_LIMIT = 500;
+  for (const projectDoc of snap.docs) {
+    // サブコレクション: reviewArticles, metadata
+    for (const subName of ["reviewArticles", "metadata"]) {
+      const subSnap = await projectDoc.ref.collection(subName).get();
+      for (let i = 0; i < subSnap.docs.length; i += BATCH_LIMIT) {
+        const chunk = subSnap.docs.slice(i, i + BATCH_LIMIT);
+        const batch = db.batch();
+        for (const doc of chunk) batch.delete(doc.ref);
+        await batch.commit();
+      }
+    }
+  }
+
+  // プロジェクト本体を削除
+  for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
+    const chunk = snap.docs.slice(i, i + BATCH_LIMIT);
+    const batch = db.batch();
+    for (const doc of chunk) batch.delete(doc.ref);
+    await batch.commit();
+  }
+  return snap.size;
+}
+
 // ---------- レビュー記事 CRUD ----------
 
 /**

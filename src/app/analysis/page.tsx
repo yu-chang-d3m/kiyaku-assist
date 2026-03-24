@@ -173,6 +173,27 @@ function AnalysisPageContent() {
       };
     });
 
+    // 重複する articleNum を検出し、ユニークな識別子に変換する
+    // （管理規約本体 + 使用細則 + 契約書等で第1条〜が重複する場合への対応）
+    const numCount: Record<string, number> = {};
+    for (const a of articles) {
+      numCount[a.articleNum] = (numCount[a.articleNum] ?? 0) + 1;
+    }
+    const hasDuplicates = Object.values(numCount).some((c) => c > 1);
+    if (hasDuplicates) {
+      const numIdx: Record<string, number> = {};
+      for (const a of articles) {
+        numIdx[a.articleNum] = (numIdx[a.articleNum] ?? 0) + 1;
+        if (numCount[a.articleNum] > 1) {
+          // カテゴリが異なる場合はカテゴリ名で区別、同じ場合は連番で区別
+          const suffix = a.category !== "雑則"
+            ? a.category
+            : String(numIdx[a.articleNum]);
+          a.articleNum = `${a.articleNum}〔${suffix}〕`;
+        }
+      }
+    }
+
     setPhase("analyzing");
     setProgressMsg("分析を準備中...");
     setProgressPercent(0);

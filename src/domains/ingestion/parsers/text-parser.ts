@@ -34,7 +34,17 @@ const ARTICLE_PATTERN = /^(第\s*[０-９\d](?:\s*[０-９\d])*\s*条(?:\s*の\s
 const PARAGRAPH_PATTERN = /^([０-９\d]+)\s+(.+)$/;
 
 /** 号の検出パターン（例: "一 ..."、"(1) ..."、"① ..."） */
-const ITEM_PATTERN = /^(?:([一二三四五六七八九十]+)|[（(]([０-９\d]+)[）)]|([①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]))\s+(.+)$/;
+const ITEM_PATTERN = /^(?:([一二三四五六七八九十]+)|[（(]([０-９\d]+)[）)]|([①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑲⑳]))\s+(.+)$/;
+
+/**
+ * サブ文書（使用細則・会則・契約書等）のタイトル検出パターン
+ * 管理規約本体の後に付属する別文書を検出し、独立したセクションとして扱う。
+ * 条文番号のリセット（再び第1条から始まる）に対応するため必須。
+ */
+const SUB_DOC_PATTERN = /^(.{2,30}(?:使用細則|会則|契約書|使用規則|規則|規程|協定書|覚書))$/;
+
+/** 附則の検出パターン */
+const APPENDIX_PATTERN = /^附\s*則$/;
 
 /** 条番号文字列からスペースを除去して正規化 */
 function normalizeArticleNumStr(raw: string): string {
@@ -90,8 +100,37 @@ export class TextParser implements ArticleParser {
       // 章の検出
       const chapterMatch = line.match(CHAPTER_PATTERN);
       if (chapterMatch) {
+        // 前の条文を保存（章をまたぐ場合）
+        if (currentArticle) {
+          if (currentParagraph) {
+            currentArticle.paragraphs.push(currentParagraph);
+            currentParagraph = null;
+          }
+          articles.push(currentArticle);
+          currentArticle = null;
+        }
         currentChapter = normalizeNumber(chapterMatch[1]);
         currentChapterTitle = chapterMatch[2].trim();
+        chapterNames.push(currentChapterTitle);
+        continue;
+      }
+
+      // サブ文書（使用細則・会則・契約書等）の検出
+      // 管理規約本体の後に付属する別文書を独立セクションとして扱う
+      const subDocMatch = line.match(SUB_DOC_PATTERN);
+      const appendixMatch = !subDocMatch ? line.match(APPENDIX_PATTERN) : null;
+      if (subDocMatch || appendixMatch) {
+        // 前の条文を保存
+        if (currentArticle) {
+          if (currentParagraph) {
+            currentArticle.paragraphs.push(currentParagraph);
+            currentParagraph = null;
+          }
+          articles.push(currentArticle);
+          currentArticle = null;
+        }
+        currentChapter++;
+        currentChapterTitle = subDocMatch ? subDocMatch[1].trim() : "附則";
         chapterNames.push(currentChapterTitle);
         continue;
       }

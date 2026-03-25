@@ -15,6 +15,7 @@ export const ProjectCreateSchema = z.object({
   unitCount: z.enum(["small", "medium", "large", "xlarge"]),
   targetTiming: z.string().min(1, "改定目標時期は必須です"),
   hasCurrentRules: z.boolean(),
+  documentType: z.enum(["management-rules", "usage-rules", "other-bylaws"]).default("management-rules"),
   currentStep: z.number().int().min(0).max(5).default(0),
 });
 
@@ -25,6 +26,7 @@ export const ProjectUpdateSchema = z.object({
   unitCount: z.enum(["small", "medium", "large", "xlarge"]).optional(),
   targetTiming: z.string().min(1).optional(),
   hasCurrentRules: z.boolean().optional(),
+  documentType: z.enum(["management-rules", "usage-rules", "other-bylaws"]).optional(),
   currentStep: z.number().int().min(0).max(5).optional(),
 });
 

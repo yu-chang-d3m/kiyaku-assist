@@ -69,11 +69,59 @@ interface GapAnalysisOutput {
 /**
  * 1条文のギャップ分析を実行する
  */
+export type DocumentType = "management-rules" | "usage-rules" | "other-bylaws";
+
+/** 文書種別に応じたシステムプロンプトを生成 */
+function buildSystemPrompt(documentType: DocumentType): string {
+  switch (documentType) {
+    case "usage-rules":
+      return `あなたはマンション管理規約の専門家です。
+使用細則の条文を分析してください。
+使用細則は管理規約に従属する詳細ルールであり、法改正の直接的な対象ではありません。
+
+分析の観点:
+1. 親規約（管理規約）との整合性
+2. 現行法令への適合性（明らかな法令違反がないか）
+3. 実務上の改善余地
+
+重要度の判定基準:
+- mandatory は使用しないでください（使用細則には法的に必須の改正はありません）
+- recommended: 親規約との不整合がある、または改善が望ましい場合
+- optional: 改善の余地はあるが現状でも問題ない場合`;
+
+    case "other-bylaws":
+      return `あなたはマンション管理規約の専門家です。
+会則・その他の付属文書を分析してください。
+これは管理規約の付属文書であり、法改正の直接的な対象ではありません。
+
+分析の観点:
+1. 基本的な法令適合性
+2. 管理規約との矛盾がないか
+3. 内容の妥当性
+
+重要度の判定基準:
+- mandatory は使用しないでください（会則には法的に必須の改正はありません）
+- recommended: 管理規約との矛盾がある場合
+- optional: その他の改善提案`;
+
+    default: // management-rules
+      return `あなたはマンション管理規約の専門家です。
+現行規約の条文と、令和7年改正の国交省標準管理規約（単棟型）を比較し、
+ギャップ分析を行ってください。
+
+分析の観点:
+1. 改正区分所有法（2025年10月施行）への適合性
+2. 標準管理規約との乖離度
+3. 実務上の重要性（mandatory: 法令違反のリスクあり、recommended: 対応推奨、optional: 対応任意）`;
+  }
+}
+
 async function analyzeArticle(
   articleNum: string,
   category: string,
   currentText: string | null,
   relatedDocs: RetrievedDocument[],
+  documentType: DocumentType = "management-rules",
 ): Promise<GapAnalysisItem> {
   // キャッシュチェック
   const cacheKey = generateCacheKey(
@@ -95,14 +143,7 @@ async function analyzeArticle(
     .map((d) => `【${d.metadata["ref"] ?? "参照"}】\n${d.content}`)
     .join("\n\n");
 
-  const systemPrompt = `あなたはマンション管理規約の専門家です。
-現行規約の条文と、令和7年改正の国交省標準管理規約（単棟型）を比較し、
-ギャップ分析を行ってください。
-
-分析の観点:
-1. 改正区分所有法（2025年10月施行）への適合性
-2. 標準管理規約との乖離度
-3. 実務上の重要性（mandatory: 法令違反のリスクあり、recommended: 対応推奨、optional: 対応任意）`;
+  const systemPrompt = buildSystemPrompt(documentType);
 
   const userPrompt = currentText
     ? `## 現行規約 ${articleNum}
@@ -217,6 +258,7 @@ async function analyzeBatchArticles(
     currentText: string | null;
     relatedDocs: RetrievedDocument[];
   }>,
+  documentType: DocumentType = "management-rules",
 ): Promise<GapAnalysisItem[]> {
   // キャッシュチェック: 全条文がキャッシュにある場合はスキップ
   const cachedItems: GapAnalysisItem[] = [];
@@ -255,14 +297,8 @@ async function analyzeBatchArticles(
     return `### ${a.articleNum}（カテゴリ: ${a.category}）\n**現行規約:** なし（新規追加候補）\n\n**標準管理規約:**\n${standardTexts || "（該当なし）"}`;
   }).join("\n\n---\n\n");
 
-  const systemPrompt = `あなたはマンション管理規約の専門家です。
-現行規約の条文と、令和7年改正の国交省標準管理規約（単棟型）を比較し、
-ギャップ分析を行ってください。
-
-分析の観点:
-1. 改正区分所有法（2025年10月施行）への適合性
-2. 標準管理規約との乖離度
-3. 実務上の重要性（mandatory: 法令違反のリスクあり、recommended: 対応推奨、optional: 対応任意）
+  const basePrompt = buildSystemPrompt(documentType);
+  const systemPrompt = `${basePrompt}
 
 以下の${uncachedArticles.length}件の条文をすべて分析し、各条文について結果を出力してください。
 articleNum は入力と完全に一致する値を返してください。`;
@@ -292,6 +328,7 @@ articleNum は入力と完全に一致する値を返してください。`;
           article.category,
           article.currentText,
           article.relatedDocs,
+          documentType,
         );
         batchItems.push(fallback);
       } catch (err) {
@@ -353,6 +390,7 @@ export async function analyzeGaps(
   }>,
   onBatchComplete?: (completedCount: number, totalCount: number, batchArticleNums: string[]) => void,
   concurrency: number = 2,
+  documentType: DocumentType = "management-rules",
 ): Promise<AnalysisResult> {
   logger.info(
     { projectId, articleCount: articles.length, batchSize: BATCH_SIZE, concurrency },
@@ -373,7 +411,7 @@ export async function analyzeGaps(
   for (let i = 0; i < batches.length; i += concurrency) {
     const concurrentBatches = batches.slice(i, i + concurrency);
     const results = await Promise.allSettled(
-      concurrentBatches.map((batch) => analyzeBatchArticles(batch)),
+      concurrentBatches.map((batch) => analyzeBatchArticles(batch, documentType)),
     );
 
     for (let j = 0; j < results.length; j++) {
@@ -394,7 +432,7 @@ export async function analyzeGaps(
         // バッチ全体が失敗した場合、1件ずつリトライ
         for (const article of batch) {
           try {
-            const retryResult = await analyzeBatchArticles([article]);
+            const retryResult = await analyzeBatchArticles([article], documentType);
             items.push(...retryResult);
             logger.info({ articleNum: article.articleNum }, "個別リトライ成功");
           } catch (retryError) {

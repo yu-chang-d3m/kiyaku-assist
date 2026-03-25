@@ -547,6 +547,7 @@ export interface ProjectCreate {
   unitCount: "small" | "medium" | "large" | "xlarge";
   targetTiming: string;
   hasCurrentRules: boolean;
+  documentType?: "management-rules" | "usage-rules" | "other-bylaws";
   currentStep: number;
 }
 

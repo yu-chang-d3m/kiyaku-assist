@@ -82,6 +82,18 @@ const ONBOARDING_QUESTIONS: readonly OnboardingQuestion[] = [
     ],
   },
   {
+    id: "documentType",
+    question: "レビュー対象の文書は何ですか？",
+    description:
+      "管理規約本体と使用細則・会則では、分析の基準が異なります。",
+    type: "select",
+    options: [
+      { value: "management-rules", label: "管理規約" },
+      { value: "usage-rules", label: "使用細則" },
+      { value: "other-bylaws", label: "会則・その他" },
+    ],
+  },
+  {
     id: "schedule",
     question: "総会の予定時期は？",
     description:
@@ -151,6 +163,7 @@ function OnboardingPageContent() {
           unitCount: (answers.unitCount ?? "medium") as "small" | "medium" | "large" | "xlarge",
           targetTiming: answers.schedule ?? "undecided",
           hasCurrentRules: answers.hasCurrentRules === "yes",
+          documentType: (answers.documentType ?? "management-rules") as "management-rules" | "usage-rules" | "other-bylaws",
           currentStep: 0,
         });
 

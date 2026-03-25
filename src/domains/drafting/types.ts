@@ -20,6 +20,8 @@ export interface DraftRequest {
   importance: "mandatory" | "recommended" | "optional";
   /** マンション属性（法人格、規模など） */
   condoContext: CondoContext;
+  /** 文書種別（管理規約/使用細則/会則） */
+  documentType?: "management-rules" | "usage-rules" | "other-bylaws";
 }
 
 /** マンション属性コンテキスト */

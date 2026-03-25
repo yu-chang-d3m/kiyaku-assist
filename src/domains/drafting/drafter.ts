@@ -56,6 +56,65 @@ interface DraftOutput {
   baseRef: string;
 }
 
+// ---------- 文書種別別プロンプト ----------
+
+type DraftDocumentType = "management-rules" | "usage-rules" | "other-bylaws";
+
+function buildDraftSystemPrompt(
+  documentType: DraftDocumentType,
+  condoDesc: string,
+  condoType: string,
+): string {
+  const corporateNote = condoType === "corporate" ? "法人格を持つ" : "法人格を持たない";
+  const commonRules = `5. 解説は組合員（法律の専門家ではない一般の方）が理解できる平易な表現にする
+6. 法的助言は行わない（弁護士法72条に留意）`;
+
+  switch (documentType) {
+    case "usage-rules":
+      return `あなたはマンション管理規約の専門家です。
+使用細則の改定ドラフトを生成してください。
+使用細則は管理規約に従属する詳細ルールです。
+
+## マンション属性
+${condoDesc}
+
+## ドラフト生成のルール
+1. 親規約（管理規約）との整合性を確保する
+2. 実務上の運用しやすさを重視する
+3. 条文は正式な細則形式で記述する
+4. 管理組合が${corporateNote}ことを考慮する
+${commonRules}`;
+
+    case "other-bylaws":
+      return `あなたはマンション管理規約の専門家です。
+会則・付属文書の改定ドラフトを生成してください。
+
+## マンション属性
+${condoDesc}
+
+## ドラフト生成のルール
+1. 管理規約との矛盾がないようにする
+2. 基本的な法令適合性を確保する
+3. 条文は正式な会則形式で記述する
+4. 管理組合が${corporateNote}ことを考慮する
+${commonRules}`;
+
+    default: // management-rules
+      return `あなたはマンション管理規約の専門家です。
+以下のマンション属性と分析結果に基づいて、改定条文のドラフトを生成してください。
+
+## マンション属性
+${condoDesc}
+
+## ドラフト生成のルール
+1. 令和7年改正の標準管理規約（単棟型）に準拠する
+2. 改正区分所有法（2025年10月施行）の要件を満たす
+3. 条文は正式な規約形式で記述する（第X条、項、号の階層構造）
+4. 管理組合が${corporateNote}ことを考慮する
+${commonRules}`;
+  }
+}
+
 // ---------- 単一条文のドラフト生成 ----------
 
 /**
@@ -82,20 +141,9 @@ async function generateDraft(request: DraftRequest): Promise<DraftResult> {
   }
 
   const condoDesc = buildCondoDescription(request.condoContext);
+  const docType = request.documentType ?? "management-rules";
 
-  const systemPrompt = `あなたはマンション管理規約の専門家です。
-以下のマンション属性と分析結果に基づいて、改定条文のドラフトを生成してください。
-
-## マンション属性
-${condoDesc}
-
-## ドラフト生成のルール
-1. 令和7年改正の標準管理規約（単棟型）に準拠する
-2. 改正区分所有法（2025年10月施行）の要件を満たす
-3. 条文は正式な規約形式で記述する（第X条、項、号の階層構造）
-4. 管理組合が${request.condoContext.condoType === "corporate" ? "法人格を持つ" : "法人格を持たない"}ことを考慮する
-5. 解説は組合員（法律の専門家ではない一般の方）が理解できる平易な表現にする
-6. 法的助言は行わない（弁護士法72条に留意）`;
+  const systemPrompt = buildDraftSystemPrompt(docType, condoDesc, request.condoContext.condoType);
 
   const userPrompt = request.currentText
     ? `## ギャップ分析結果

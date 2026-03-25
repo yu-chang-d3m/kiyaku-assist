@@ -12,8 +12,8 @@
 import { NextRequest } from "next/server";
 import * as z from "zod/v4";
 import { batchRetrieve } from "@/domains/analysis/retriever";
-import { analyzeGaps } from "@/domains/analysis/analyzer";
-import { batchSaveReviewArticles } from "@/shared/db/server-actions";
+import { analyzeGaps, type DocumentType } from "@/domains/analysis/analyzer";
+import { batchSaveReviewArticles, getProject } from "@/shared/db/server-actions";
 import { inferChapterFromCategory } from "@/shared/db/chapter-utils";
 import { logger } from "@/shared/observability/logger";
 
@@ -59,6 +59,17 @@ export async function POST(request: NextRequest) {
   }
 
   const { projectId, articles } = validatedData;
+
+  // Project から documentType を取得
+  let documentType: DocumentType = "management-rules";
+  try {
+    const project = await getProject(projectId);
+    if (project?.documentType) {
+      documentType = project.documentType;
+    }
+  } catch (err) {
+    logger.warn({ projectId, err }, "Project の取得に失敗、デフォルトの documentType を使用");
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -119,6 +130,8 @@ export async function POST(request: NextRequest) {
               articleNum: `${first}〜${last} 分析完了`,
             });
           },
+          2, // concurrency
+          documentType,
         );
 
         logger.info(

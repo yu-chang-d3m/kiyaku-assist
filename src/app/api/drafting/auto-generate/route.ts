@@ -21,6 +21,7 @@ import * as z from "zod/v4";
 import {
   getReviewArticles,
   batchSaveReviewArticles,
+  getProject,
 } from "@/shared/db/server-actions";
 import { inferChapterFromCategory } from "@/shared/db/chapter-utils";
 import { retrieveRelatedStandards } from "@/domains/analysis/retriever";
@@ -88,6 +89,17 @@ export async function POST(request: NextRequest) {
       }, 15_000);
 
       try {
+        // 0. Project から documentType を取得
+        let documentType: "management-rules" | "usage-rules" | "other-bylaws" = "management-rules";
+        try {
+          const project = await getProject(projectId);
+          if (project?.documentType) {
+            documentType = project.documentType;
+          }
+        } catch (err) {
+          logger.warn({ projectId, err }, "Project の取得に失敗、デフォルトの documentType を使用");
+        }
+
         // 1. Firestore から ReviewArticle を取得
         const articles = await getReviewArticles(projectId);
 
@@ -153,6 +165,7 @@ export async function POST(request: NextRequest) {
             gapSummary: article.summary,
             importance: article.importance,
             condoContext,
+            documentType,
           }),
         );
 

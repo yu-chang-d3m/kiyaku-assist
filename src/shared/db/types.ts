@@ -27,6 +27,8 @@ export interface Project {
   targetTiming: string;
   /** 現行規約の有無 */
   hasCurrentRules: boolean;
+  /** 文書種別（管理規約/使用細則/会則・その他） */
+  documentType?: "management-rules" | "usage-rules" | "other-bylaws";
   /** 現在のステップ番号 */
   currentStep: number;
   /** 作成日時（ISO 文字列） */

@@ -27,5 +27,7 @@ env:
     value: kiyaku-assist
   - variable: VERTEX_AI_SEARCH_DATASTORE_ID
     value: standard-rules-ds
+  - variable: VERTEX_AI_SEARCH_ENGINE_ID
+    value: standard-rules-engine
   - variable: GCP_LOCATION
     value: global

@@ -173,7 +173,7 @@ export default function GuidePage() {
                 次のステップで現行規約をアップロードし、AIに分析してもらいましょう。
               </p>
             </div>
-            <Button size="lg" asChild>
+            <Button size="lg" asChild data-test="guide-next">
               <Link href="/upload">次へ: 規約をアップロード</Link>
             </Button>
           </CardContent>

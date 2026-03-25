@@ -569,6 +569,7 @@ function UploadPageContent() {
                     accept=".txt,.pdf,.docx"
                     className="hidden"
                     onChange={handleFileInput}
+                    data-test="upload-file-input"
                   />
                 </div>
 
@@ -693,7 +694,7 @@ function UploadPageContent() {
                   やり直す
                 </Button>
                 {showDemoOption && (
-                  <Button onClick={handleUseDemo} variant="secondary">
+                  <Button onClick={handleUseDemo} variant="secondary" data-test="upload-demo">
                     デモデータで試す
                   </Button>
                 )}
@@ -763,6 +764,7 @@ function UploadPageContent() {
               <Button
                 className="flex-1"
                 onClick={() => handleConfirmAndProceed(parseResult)}
+                data-test="upload-confirm"
               >
                 次のステップへ
               </Button>

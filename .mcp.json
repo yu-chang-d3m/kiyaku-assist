@@ -3,6 +3,10 @@
     "firebase": {
       "command": "npx",
       "args": ["-y", "firebase-tools@latest", "mcp"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
     }
   }
 }

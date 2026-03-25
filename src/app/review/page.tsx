@@ -497,11 +497,11 @@ function ReviewPageContent() {
               </div>
               <div className="flex gap-2 flex-shrink-0">
                 {!allDone && (
-                  <Button variant="outline" size="lg" className="min-h-[44px]" onClick={handleApproveAllAi}>
+                  <Button variant="outline" size="lg" className="min-h-[44px]" onClick={handleApproveAllAi} data-test="review-approve-all">
                     AI推奨を全て承認
                   </Button>
                 )}
-                <Button asChild size="lg" className="min-h-[44px]">
+                <Button asChild size="lg" className="min-h-[44px]" data-test="review-next">
                   <Link href="/export">エクスポートへ</Link>
                 </Button>
               </div>

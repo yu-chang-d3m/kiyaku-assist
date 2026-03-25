@@ -1,10 +1,17 @@
+/**
+ * 本番/ステージング スモークテスト
+ *
+ * デプロイ後に最小限の動作確認を行う。認証なしで実行可能な範囲をテストする。
+ * playwright.config.ts の staging-smoke プロジェクトで実行される。
+ *
+ * 実行例:
+ *   STAGING_URL=https://your-app.web.app npx playwright test --project=staging-smoke
+ */
+
 import { test, expect, Page } from "@playwright/test";
 import path from "path";
 
-const BASE_URL =
-  "https://kiyaku-assist--kiyaku-assist.asia-east1.hosted.app";
 const SCREENSHOT_DIR = path.join(__dirname, "screenshots");
-const PDF_PATH = "/Users/uchan/Desktop/00301管理規約案20260301.pdf";
 
 // ── Helper ──────────────────────────────────────────────
 async function screenshot(page: Page, name: string) {
@@ -17,35 +24,26 @@ async function screenshot(page: Page, name: string) {
 // ── 1. トップページ表示確認 ────────────────────────────
 test.describe("1. トップページ", () => {
   test("トップページが正しく表示される", async ({ page }) => {
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "networkidle" });
     await screenshot(page, "01_top_page");
 
-    // タイトルまたはロゴが表示されること
+    // body がレンダリングされていること
+    await expect(page.locator("body")).toBeVisible();
+
+    // タイトルが設定されていること
     const title = await page.title();
-    console.log("📄 Page title:", title);
-
-    // ページ内のテキスト内容を収集
-    const bodyText = await page.innerText("body");
-    console.log("📝 Body text (first 500 chars):", bodyText.slice(0, 500));
-
-    // 基本的なレンダリング確認
-    expect(await page.isVisible("body")).toBe(true);
+    expect(title.length).toBeGreaterThan(0);
   });
 
   test("ナビゲーション要素の確認", async ({ page }) => {
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "networkidle" });
 
-    // ヘッダーの存在確認
-    const header = page.locator("header");
-    const hasHeader = (await header.count()) > 0;
-    console.log("🔍 Header exists:", hasHeader);
+    // ヘッダーが存在すること
+    await expect(page.locator("header")).toBeVisible();
 
-    // リンクやボタンの一覧
-    const links = await page.locator("a").allInnerTexts();
-    console.log("🔗 Links:", links);
-
-    const buttons = await page.locator("button").allInnerTexts();
-    console.log("🔘 Buttons:", buttons);
+    // リンクが1つ以上あること
+    const linkCount = await page.locator("a").count();
+    expect(linkCount).toBeGreaterThan(0);
 
     await screenshot(page, "01_nav_elements");
   });
@@ -53,84 +51,68 @@ test.describe("1. トップページ", () => {
 
 // ── 2. ログインページ ──────────────────────────────────
 test.describe("2. ログイン", () => {
-  test("ログインページが表示される", async ({ page }) => {
-    await page.goto(`${BASE_URL}/login`, { waitUntil: "networkidle" });
+  test("ログインページのフォームが表示される", async ({ page }) => {
+    await page.goto("/login", { waitUntil: "networkidle" });
     await screenshot(page, "02_login_page");
 
-    const bodyText = await page.innerText("body");
-    console.log("📝 Login page text:", bodyText.slice(0, 500));
+    // メールフィールドが存在すること
+    await expect(
+      page.locator('[data-test="login-email"]').or(
+        page.locator('input[type="email"]'),
+      ),
+    ).toBeVisible();
 
-    // メールフィールドの存在
-    const emailInput = page.locator('input[type="email"], input[name="email"]');
-    const hasEmail = (await emailInput.count()) > 0;
-    console.log("📧 Email input exists:", hasEmail);
-
-    // パスワードフィールドの存在
-    const passwordInput = page.locator(
-      'input[type="password"], input[name="password"]'
-    );
-    const hasPassword = (await passwordInput.count()) > 0;
-    console.log("🔒 Password input exists:", hasPassword);
-
-    // Googleログインボタン
-    const googleBtn = page.locator('button:has-text("Google")');
-    const hasGoogle = (await googleBtn.count()) > 0;
-    console.log("🔵 Google login button exists:", hasGoogle);
+    // パスワードフィールドが存在すること
+    await expect(
+      page.locator('[data-test="login-password"]').or(
+        page.locator('input[type="password"]'),
+      ),
+    ).toBeVisible();
   });
 
   test("空のフォームでログインするとエラーが表示される", async ({ page }) => {
-    await page.goto(`${BASE_URL}/login`, { waitUntil: "networkidle" });
+    await page.goto("/login", { waitUntil: "networkidle" });
 
-    // ログインボタンをクリック（空のまま）
-    const submitBtn = page.locator(
-      'button[type="submit"]:has-text("メールでログイン")'
+    const submitBtn = page.locator('[data-test="login-submit"]').or(
+      page.locator('button[type="submit"]:has-text("メールでログイン")'),
     );
-    if ((await submitBtn.count()) > 0) {
-      await submitBtn.first().click();
-      await page.waitForTimeout(1000);
-      await screenshot(page, "02_login_empty_submit");
+    await expect(submitBtn).toBeVisible();
+    await submitBtn.click();
 
-      const bodyText = await page.innerText("body");
-      console.log("📝 After empty submit:", bodyText.slice(0, 500));
-    } else {
-      console.log("⚠️ Login submit button not found");
-    }
+    // エラーメッセージが表示されること
+    await expect(
+      page.getByText("メールアドレスとパスワードを入力", { exact: false }),
+    ).toBeVisible({ timeout: 5000 });
+
+    await screenshot(page, "02_login_empty_submit");
   });
 
-  test("不正なメール/パスワードでログインするとエラーが表示される", async ({
-    page,
-  }) => {
-    await page.goto(`${BASE_URL}/login`, { waitUntil: "networkidle" });
+  test("不正なメール/パスワードでエラーが表示される", async ({ page }) => {
+    await page.goto("/login", { waitUntil: "networkidle" });
 
-    const emailInput = page.locator('input[type="email"], input[name="email"]');
-    const passwordInput = page.locator(
-      'input[type="password"], input[name="password"]'
-    );
+    await page.locator('[data-test="login-email"]').or(
+      page.locator('input[type="email"]'),
+    ).fill("invalid@example.com");
 
-    if ((await emailInput.count()) > 0 && (await passwordInput.count()) > 0) {
-      await emailInput.first().fill("invalid@example.com");
-      await passwordInput.first().fill("wrongpassword123");
+    await page.locator('[data-test="login-password"]').or(
+      page.locator('input[type="password"]'),
+    ).fill("wrongpassword123");
 
-      const submitBtn = page.locator(
-        'button[type="submit"], button:has-text("ログイン")'
-      );
-      if ((await submitBtn.count()) > 0) {
-        await submitBtn.first().click();
-        await page.waitForTimeout(3000);
-        await screenshot(page, "02_login_invalid_credentials");
+    await page.locator('[data-test="login-submit"]').or(
+      page.locator('button[type="submit"]:has-text("メールでログイン")'),
+    ).click();
 
-        const bodyText = await page.innerText("body");
-        console.log("📝 After invalid login:", bodyText.slice(0, 500));
-      }
-    } else {
-      console.log("⚠️ Email/Password inputs not found");
-    }
+    // エラーメッセージが表示されるまで待機
+    await expect(
+      page.getByText("失敗しました", { exact: false }),
+    ).toBeVisible({ timeout: 10000 });
+
+    await screenshot(page, "02_login_invalid_credentials");
   });
 });
 
 // ── 3. 未認証でのページアクセス確認 ───────────────────
 test.describe("3. 認証ガード", () => {
-  // 認証ガードで保護されるべきページ
   const protectedRoutes = [
     "/onboarding",
     "/upload",
@@ -144,145 +126,90 @@ test.describe("3. 認証ガード", () => {
     test(`${route} に未認証でアクセス → /login にリダイレクトされる`, async ({
       page,
     }) => {
-      await page.goto(`${BASE_URL}${route}`, {
-        waitUntil: "networkidle",
-      });
-      // AuthGuard により /login へリダイレクトされることを確認
-      await page.waitForURL("**/login", { timeout: 10000 });
-      const finalUrl = page.url();
-      console.log(`🔐 ${route} → redirected to: ${finalUrl}`);
-      expect(finalUrl).toContain("/login");
-      await screenshot(
-        page,
-        `03_auth_guard_${route.replace("/", "")}`
-      );
+      await page.goto(route, { waitUntil: "networkidle" });
+      await page.waitForURL("**/login**", { timeout: 10000 });
+      expect(page.url()).toContain("/login");
+      await screenshot(page, `03_auth_guard_${route.replace("/", "")}`);
     });
   }
 
-  // /guide は保護不要（誰でも閲覧可能）
   test("/guide は認証なしでもアクセス可能", async ({ page }) => {
-    await page.goto(`${BASE_URL}/guide`, { waitUntil: "networkidle" });
-    const finalUrl = page.url();
-    console.log(`📖 /guide → ${finalUrl}`);
-    expect(finalUrl).toContain("/guide");
+    await page.goto("/guide", { waitUntil: "networkidle" });
+    expect(page.url()).toContain("/guide");
     await screenshot(page, "03_auth_guard_guide");
   });
 });
 
-// ── 4. オンボーディングフロー（認証なしでアクセス可能か確認）─
-test.describe("4. オンボーディング", () => {
-  test("オンボーディングのUIを確認", async ({ page }) => {
-    await page.goto(`${BASE_URL}/onboarding`, { waitUntil: "networkidle" });
-    const finalUrl = page.url();
+// ── 4. パフォーマンス ─────────────────────────────────
+test.describe("4. パフォーマンス", () => {
+  test("トップページが10秒以内に読み込まれる", async ({ page }) => {
+    const start = Date.now();
+    await page.goto("/", { waitUntil: "networkidle" });
+    const loadTime = Date.now() - start;
 
-    // リダイレクトされなかった場合のみUI確認
-    if (finalUrl.includes("/onboarding")) {
-      await screenshot(page, "04_onboarding");
-      const bodyText = await page.innerText("body");
-      console.log("📝 Onboarding page:", bodyText.slice(0, 500));
+    const perfMetrics = await page.evaluate(() => {
+      const nav = performance.getEntriesByType(
+        "navigation",
+      )[0] as PerformanceNavigationTiming;
+      return {
+        ttfb: Math.round(nav.responseStart - nav.requestStart),
+        domContentLoaded: Math.round(
+          nav.domContentLoadedEventEnd - nav.startTime,
+        ),
+        load: Math.round(nav.loadEventEnd - nav.startTime),
+      };
+    });
+    console.log(`Performance: load=${loadTime}ms`, perfMetrics);
 
-      // フォーム要素の確認
-      const inputs = await page.locator("input, select, textarea").count();
-      const buttons = await page.locator("button").allInnerTexts();
-      console.log("📋 Form inputs count:", inputs);
-      console.log("🔘 Buttons:", buttons);
-    } else {
-      console.log("🔐 Redirected to:", finalUrl);
-    }
+    expect(loadTime).toBeLessThan(10000);
   });
 });
 
-// ── 5. アップロードページ ──────────────────────────────
-test.describe("5. アップロード", () => {
-  test("アップロードページの表示確認", async ({ page }) => {
-    await page.goto(`${BASE_URL}/upload`, { waitUntil: "networkidle" });
-    const finalUrl = page.url();
+// ── 5. コンソールエラーの収集 ──────────────────────────
+test.describe("5. コンソールエラー", () => {
+  test("公開ページにページクラッシュ級のエラーがないこと", async ({
+    page,
+  }) => {
+    const pageErrors: string[] = [];
 
-    if (finalUrl.includes("/upload")) {
-      await screenshot(page, "05_upload_page");
-      const bodyText = await page.innerText("body");
-      console.log("📝 Upload page:", bodyText.slice(0, 500));
+    page.on("pageerror", (err) => {
+      pageErrors.push(err.message);
+    });
 
-      // ドロップゾーンの確認
-      const dropzone = page.locator(
-        '[class*="drop"], [class*="upload"], [role="button"]'
-      );
-      console.log("📦 Dropzone-like elements:", await dropzone.count());
+    const publicRoutes = ["/", "/login", "/guide"];
 
-      // ファイル入力の確認
-      const fileInput = page.locator('input[type="file"]');
-      console.log("📁 File input exists:", (await fileInput.count()) > 0);
-    } else {
-      console.log("🔐 Redirected to:", finalUrl);
-    }
-  });
-
-  test("PDFファイルのアップロードテスト", async ({ page }) => {
-    await page.goto(`${BASE_URL}/upload`, { waitUntil: "networkidle" });
-    const finalUrl = page.url();
-
-    if (!finalUrl.includes("/upload")) {
-      console.log("🔐 Redirected, skipping upload test");
-      return;
+    for (const route of publicRoutes) {
+      await page.goto(route, { waitUntil: "networkidle" });
     }
 
-    // ファイル入力を探す（hidden でも操作可能）
-    const fileInput = page.locator('input[type="file"]');
-    if ((await fileInput.count()) > 0) {
-      await fileInput.first().setInputFiles(PDF_PATH);
-      await page.waitForTimeout(3000);
-      await screenshot(page, "05_after_upload");
-      const bodyText = await page.innerText("body");
-      console.log("📝 After upload:", bodyText.slice(0, 500));
-    } else {
-      console.log("⚠️ File input not found, trying click on dropzone");
-
-      // ドロップゾーンをクリックしてファイルダイアログを出そうとする
-      const uploadArea = page
-        .locator('[class*="drop"], [class*="upload"]')
-        .first();
-      if ((await uploadArea.count()) > 0) {
-        console.log("📦 Found upload area, clicking...");
-        // filechooser を使う
-        const [fileChooser] = await Promise.all([
-          page.waitForEvent("filechooser", { timeout: 5000 }).catch(() => null),
-          uploadArea.click(),
-        ]);
-        if (fileChooser) {
-          await fileChooser.setFiles(PDF_PATH);
-          await page.waitForTimeout(3000);
-          await screenshot(page, "05_after_upload_via_chooser");
-        }
-      }
-    }
+    // PAGE ERROR（未捕捉例外）がゼロであること
+    expect(
+      pageErrors,
+      `ページエラーが発生: ${pageErrors.join(", ")}`,
+    ).toHaveLength(0);
   });
 });
 
-// ── 6. チャットページ ──────────────────────────────────
-test.describe("6. チャット", () => {
-  test("チャットページの表示確認", async ({ page }) => {
-    await page.goto(`${BASE_URL}/chat`, { waitUntil: "networkidle" });
-    const finalUrl = page.url();
+// ── 6. アクセシビリティ基本チェック ───────────────────
+test.describe("6. アクセシビリティ", () => {
+  test("基本的なアクセシビリティ要素の確認", async ({ page }) => {
+    await page.goto("/", { waitUntil: "networkidle" });
 
-    if (finalUrl.includes("/chat")) {
-      await screenshot(page, "06_chat_page");
-      const bodyText = await page.innerText("body");
-      console.log("📝 Chat page:", bodyText.slice(0, 500));
+    // lang 属性が設定されていること
+    const lang = await page.getAttribute("html", "lang");
+    expect(lang).toBeTruthy();
 
-      // メッセージ入力欄の確認
-      const chatInput = page.locator(
-        'input[type="text"], textarea, [contenteditable="true"]'
-      );
-      console.log("💬 Chat input exists:", (await chatInput.count()) > 0);
-    } else {
-      console.log("🔐 Redirected to:", finalUrl);
-    }
+    // alt なしの画像がないこと
+    const imagesWithoutAlt = await page.locator("img:not([alt])").count();
+    expect(imagesWithoutAlt).toBe(0);
   });
 });
 
 // ── 7. レスポンシブ確認（モバイル） ────────────────────
 test.describe("7. レスポンシブ", () => {
-  test("モバイルビューの確認", async ({ browser }) => {
+  test("モバイルビューでトップページとログインが表示される", async ({
+    browser,
+  }) => {
     const context = await browser.newContext({
       viewport: { width: 375, height: 812 },
       userAgent:
@@ -290,121 +217,14 @@ test.describe("7. レスポンシブ", () => {
     });
     const page = await context.newPage();
 
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.goto("/", { waitUntil: "networkidle" });
+    await expect(page.locator("body")).toBeVisible();
     await screenshot(page, "07_mobile_top");
 
-    await page.goto(`${BASE_URL}/login`, { waitUntil: "networkidle" });
+    await page.goto("/login", { waitUntil: "networkidle" });
+    await expect(page.locator("body")).toBeVisible();
     await screenshot(page, "07_mobile_login");
 
-    const bodyText = await page.innerText("body");
-    console.log("📱 Mobile view text:", bodyText.slice(0, 300));
-
     await context.close();
-  });
-});
-
-// ── 8. パフォーマンス ─────────────────────────────────
-test.describe("8. パフォーマンス", () => {
-  test("トップページの読み込み時間を計測", async ({ page }) => {
-    const start = Date.now();
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
-    const loadTime = Date.now() - start;
-    console.log(`⏱️ Top page load time: ${loadTime}ms`);
-
-    // Performance API で詳細取得
-    const perfMetrics = await page.evaluate(() => {
-      const nav = performance.getEntriesByType(
-        "navigation"
-      )[0] as PerformanceNavigationTiming;
-      return {
-        dns: nav.domainLookupEnd - nav.domainLookupStart,
-        connect: nav.connectEnd - nav.connectStart,
-        ttfb: nav.responseStart - nav.requestStart,
-        domContentLoaded: nav.domContentLoadedEventEnd - nav.startTime,
-        load: nav.loadEventEnd - nav.startTime,
-        transferSize: nav.transferSize,
-      };
-    });
-    console.log("📊 Performance metrics:", JSON.stringify(perfMetrics));
-
-    // 5秒以内に読み込み完了すること
-    expect(loadTime).toBeLessThan(10000);
-  });
-});
-
-// ── 9. コンソールエラーの収集 ──────────────────────────
-test.describe("9. コンソールエラー", () => {
-  test("各ページでコンソールエラーを収集", async ({ page }) => {
-    const errors: string[] = [];
-    const warnings: string[] = [];
-
-    page.on("console", (msg) => {
-      if (msg.type() === "error") errors.push(msg.text());
-      if (msg.type() === "warning") warnings.push(msg.text());
-    });
-
-    page.on("pageerror", (err) => {
-      errors.push(`PAGE ERROR: ${err.message}`);
-    });
-
-    const pagesToCheck = ["/", "/login", "/onboarding"];
-
-    for (const route of pagesToCheck) {
-      console.log(`\n--- Checking ${route} ---`);
-      await page.goto(`${BASE_URL}${route}`, { waitUntil: "networkidle" });
-      await page.waitForTimeout(2000);
-    }
-
-    console.log("\n🔴 Console Errors:", JSON.stringify(errors, null, 2));
-    console.log("\n🟡 Console Warnings:", JSON.stringify(warnings, null, 2));
-
-    await screenshot(page, "09_console_check_final");
-  });
-});
-
-// ── 10. アクセシビリティ基本チェック ───────────────────
-test.describe("10. アクセシビリティ", () => {
-  test("基本的なアクセシビリティ要素の確認", async ({ page }) => {
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
-
-    // lang属性
-    const lang = await page.getAttribute("html", "lang");
-    console.log("🌐 HTML lang attribute:", lang);
-
-    // 画像のalt属性
-    const imagesWithoutAlt = await page
-      .locator("img:not([alt])")
-      .count();
-    console.log("🖼️ Images without alt:", imagesWithoutAlt);
-
-    // フォーム要素のラベル
-    const inputsWithoutLabel = await page.evaluate(() => {
-      const inputs = document.querySelectorAll(
-        'input:not([type="hidden"]):not([type="submit"])'
-      );
-      let count = 0;
-      inputs.forEach((input) => {
-        const id = input.id;
-        const hasLabel = id
-          ? document.querySelector(`label[for="${id}"]`)
-          : false;
-        const hasAriaLabel =
-          input.getAttribute("aria-label") ||
-          input.getAttribute("aria-labelledby");
-        if (!hasLabel && !hasAriaLabel) count++;
-      });
-      return count;
-    });
-    console.log("📝 Inputs without labels:", inputsWithoutLabel);
-
-    // 見出し構造
-    const headings = await page.evaluate(() => {
-      const hs = document.querySelectorAll("h1, h2, h3, h4, h5, h6");
-      return Array.from(hs).map((h) => ({
-        tag: h.tagName,
-        text: h.textContent?.trim().slice(0, 50),
-      }));
-    });
-    console.log("📑 Heading structure:", JSON.stringify(headings));
   });
 });

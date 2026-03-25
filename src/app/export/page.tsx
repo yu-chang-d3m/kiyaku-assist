@@ -449,6 +449,7 @@ function ExportPageContent() {
                   className="shrink-0 min-h-[44px]"
                   disabled={exportLoading[fmt.id] ?? false}
                   onClick={() => handleExport(fmt)}
+                  data-test={`export-download-${fmt.id}`}
                 >
                   {exportLoading[fmt.id] ? (
                     <span className="flex items-center gap-2">

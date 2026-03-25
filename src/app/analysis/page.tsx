@@ -376,7 +376,7 @@ function AnalysisPageContent() {
                   <option value="precise">精密（正確・時間がかかります）</option>
                 </select>
               </div>
-              <Button onClick={handleStartAnalysis} size="lg" className="mt-4">
+              <Button onClick={handleStartAnalysis} size="lg" className="mt-4" data-test="analysis-start">
                 分析を開始
               </Button>
             </CardContent>
@@ -701,7 +701,7 @@ function AnalysisPageContent() {
                 AIが改正案のドラフトを生成済みです。レビュー画面で確認・判断できます。
               </p>
             </div>
-            <Button size="lg" asChild>
+            <Button size="lg" asChild data-test="analysis-next">
               <Link href="/review">次のステップへ</Link>
             </Button>
           </CardContent>

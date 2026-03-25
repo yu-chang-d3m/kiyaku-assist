@@ -7,6 +7,7 @@
  * 環境変数:
  * - GCP_PROJECT_ID: GCP プロジェクト ID
  * - VERTEX_AI_SEARCH_DATASTORE_ID: データストア ID
+ * - VERTEX_AI_SEARCH_ENGINE_ID: エンジン ID（Enterprise Edition 機能に必要）
  * - GCP_LOCATION: ロケーション（デフォルト: global）
  */
 
@@ -29,9 +30,10 @@ export interface SearchResult {
 function getConfig() {
   const projectId = process.env.GCP_PROJECT_ID;
   const dataStoreId = process.env.VERTEX_AI_SEARCH_DATASTORE_ID;
+  const engineId = process.env.VERTEX_AI_SEARCH_ENGINE_ID;
   const location = process.env.GCP_LOCATION ?? "global";
 
-  return { projectId, dataStoreId, location };
+  return { projectId, dataStoreId, engineId, location };
 }
 
 /**
@@ -74,7 +76,7 @@ export async function searchStandardRules(
 
   try {
     // Discovery Engine API を直接呼び出し
-    const endpoint = buildEndpoint(config.projectId, config.location, config.dataStoreId);
+    const endpoint = buildEndpoint(config.projectId, config.location, config.dataStoreId, config.engineId);
 
     const requestBody = {
       query,
@@ -125,12 +127,23 @@ export async function searchStandardRules(
 
 /**
  * Discovery Engine API のエンドポイント URL を構築する
+ *
+ * エンジン ID が設定されている場合はエンジン経由のエンドポイントを使用する。
+ * Enterprise Edition の機能（extractive answers 等）はエンジン経由が必須。
  */
 function buildEndpoint(
   projectId: string,
   location: string,
   dataStoreId: string,
+  engineId?: string,
 ): string {
+  if (engineId) {
+    return (
+      `https://discoveryengine.googleapis.com/v1/` +
+      `projects/${projectId}/locations/${location}/` +
+      `collections/default_collection/engines/${engineId}/servingConfigs/default_search:search`
+    );
+  }
   return (
     `https://discoveryengine.googleapis.com/v1/` +
     `projects/${projectId}/locations/${location}/` +

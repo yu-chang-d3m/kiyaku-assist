@@ -107,20 +107,20 @@ export class MarkdownGenerator implements ExportGenerator {
         lines.push(`| 準拠 | ${article.baseRef} |`);
         lines.push("");
 
-        // 改定案
-        lines.push("**改定案:**");
-        lines.push("");
-        lines.push(article.draft);
-        lines.push("");
-
-        // 現行規約との比較
+        // 新旧対照表
         if (article.original) {
-          lines.push("<details>");
-          lines.push("<summary>現行規約（参考）</summary>");
+          const escOriginal = this.escapeTableCell(article.original);
+          const escDraft = this.escapeTableCell(article.draft);
+          lines.push("#### 新旧対照表");
           lines.push("");
-          lines.push(article.original);
+          lines.push("| 現行規約 | 改定案 |");
+          lines.push("|---------|-------|");
+          lines.push(`| ${escOriginal} | ${escDraft} |`);
           lines.push("");
-          lines.push("</details>");
+        } else {
+          lines.push("**改定案（新規追加）:**");
+          lines.push("");
+          lines.push(article.draft);
           lines.push("");
         }
 
@@ -144,6 +144,13 @@ export class MarkdownGenerator implements ExportGenerator {
     );
 
     return lines.join("\n");
+  }
+
+  /** Markdown テーブルセル内の改行・パイプをエスケープ */
+  private escapeTableCell(text: string): string {
+    return text
+      .replace(/\|/g, "\\|")
+      .replace(/\n/g, "<br>");
   }
 
   /** 章番号でグループ化 */

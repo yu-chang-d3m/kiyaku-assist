@@ -13,11 +13,12 @@ import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
 import { useAuth } from "@/shared/auth/auth-context";
 import type { StepId } from "@/shared/journey";
-import { getReviewArticles, patchReviewArticle, decideReview, callDraftSingle } from "@/shared/api-client";
+import { getReviewArticles, patchReviewArticle, decideReview, callDraftSingle, startAutoGenerate } from "@/shared/api-client";
 import type { ReviewArticle } from "@/shared/db/types";
 import type { GapAnalysisItem } from "@/domains/analysis/types";
-import { useProjectStore, loadProjectId, loadGapResults, saveReviewDecisions, loadReviewDecisions, saveReviewMemos, loadReviewMemos } from "@/shared/store";
+import { useProjectStore, loadProjectId, loadGapResults, saveReviewDecisions, loadReviewDecisions, saveReviewMemos, loadReviewMemos, loadOnboarding } from "@/shared/store";
 import { AuthGuard } from "@/shared/auth/auth-guard";
+import { ArticleDiffView } from "@/components/diff/article-diff-view";
 
 // ---------- 定数・ユーティリティ ----------
 const IMPORTANCE_LABEL: Record<string, string> = { mandatory: "法的必須", recommended: "推奨", optional: "任意" };
@@ -82,11 +83,14 @@ function ReviewPageContent() {
   const [importanceFilter, setImportanceFilter] = useState<ImportanceFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  const [showCurrentText, setShowCurrentText] = useState(false);
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [draftLoading, setDraftLoading] = useState<Record<string, boolean>>({});
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
+  const [batchDraftPhase, setBatchDraftPhase] = useState<"idle" | "generating" | "done" | "error">("idle");
+  const [batchDraftProgress, setBatchDraftProgress] = useState(0);
+  const [batchDraftTotal, setBatchDraftTotal] = useState(0);
+  const batchDraftControllerRef = useRef<AbortController | null>(null);
   const initDone = useRef(false);
 
   // ---------- 初期化 ----------
@@ -143,6 +147,11 @@ function ReviewPageContent() {
   }, [router, gapToReview]);
 
   useEffect(() => { if (initDone.current) return; initDone.current = true; initialize(); }, [initialize]);
+
+  // クリーンアップ: 一括ドラフト生成の SSE を中断
+  useEffect(() => {
+    return () => { batchDraftControllerRef.current?.abort(); };
+  }, []);
 
   // ---------- ソート・フィルタリング ----------
   const sortedArticles = useMemo(() =>
@@ -255,6 +264,45 @@ function ReviewPageContent() {
     } finally { setDraftLoading((p) => ({ ...p, [sid]: false })); }
   }
 
+  // undrafted count
+  const undraftedCount = useMemo(() => articles.filter((a) => !a.draft || a.draft.trim() === "").length, [articles]);
+
+  async function handleBatchDraftGenerate() {
+    const pid = loadProjectId();
+    if (!pid || undraftedCount === 0) return;
+    setBatchDraftPhase("generating");
+    setBatchDraftProgress(0);
+    setBatchDraftTotal(0);
+
+    const onboarding = loadOnboarding();
+    const condoContext = {
+      condoName: onboarding?.condoName ?? "マンション",
+      condoType: (onboarding?.isCorporate ?? "unknown") as "corporate" | "non-corporate" | "unknown",
+      unitCount: (onboarding?.unitCount ?? "medium") as "small" | "medium" | "large" | "xlarge",
+    };
+
+    const controller = startAutoGenerate(pid, "smart", condoContext, {
+      onProgress: (data) => {
+        setBatchDraftProgress(data.current);
+        setBatchDraftTotal(data.total);
+      },
+      onComplete: async () => {
+        try {
+          const { articles: refreshed } = await getReviewArticles(pid);
+          setArticles(refreshed);
+        } catch (err) {
+          console.error("一括生成後のデータ再取得に失敗:", err);
+        }
+        setBatchDraftPhase("done");
+      },
+      onError: (msg) => {
+        console.error("一括ドラフト生成エラー:", msg);
+        setBatchDraftPhase("error");
+      },
+    });
+    batchDraftControllerRef.current = controller;
+  }
+
   function handleToggleAll() {
     setCheckedIds(checkedIds.size === filteredArticles.length ? new Set() : new Set(filteredArticles.map((a) => a.id ?? "")));
   }
@@ -332,6 +380,9 @@ function ReviewPageContent() {
               <span className="text-red-600">法的必須: <strong>{counts.mandatory}</strong></span>
               <span className="text-blue-600">推奨: <strong>{counts.recommended}</strong></span>
               <span className="text-gray-500">任意: <strong>{counts.optional}</strong></span>
+              {undraftedCount > 0 && (
+                <span className="text-amber-600">ドラフト未生成: <strong>{undraftedCount}</strong></span>
+              )}
               <span className="ml-auto">完了: <strong>{decided}</strong> / {articles.length}</span>
             </div>
             <Progress value={pct} className="h-2" />
@@ -351,6 +402,19 @@ function ReviewPageContent() {
           <Button size="sm" variant="outline" onClick={handleApproveAllAi}>AI推奨を全て承認</Button>
           <Button size="sm" variant="outline" onClick={handleBulkAdopt} disabled={checkedIds.size === 0}>
             選択した項目を一括採用 ({checkedIds.size})
+          </Button>
+          <span className="w-px h-6 bg-border mx-1" />
+          <Button
+            size="sm"
+            variant={undraftedCount > 0 ? "default" : "outline"}
+            onClick={handleBatchDraftGenerate}
+            disabled={batchDraftPhase === "generating" || undraftedCount === 0}
+          >
+            {batchDraftPhase === "generating"
+              ? `ドラフト生成中 (${batchDraftProgress}/${batchDraftTotal})`
+              : undraftedCount > 0
+                ? `未生成ドラフトを一括生成 (${undraftedCount}件)`
+                : "全ドラフト生成済み"}
           </Button>
         </div>
 
@@ -380,7 +444,7 @@ function ReviewPageContent() {
                 const isSel = selectedId === aid;
                 return (
                   <tr key={aid} className={`border-b cursor-pointer transition-colors hover:bg-muted/30 ${isSel ? "bg-primary/5" : ""}`}
-                    onClick={() => { setSelectedId(isSel ? null : aid); setShowCurrentText(false); }}>
+                    onClick={() => { setSelectedId(isSel ? null : aid); }}>
                     <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={checkedIds.has(aid)} onChange={() => handleToggleCheck(aid)} className="rounded border-gray-300" />
                     </td>
@@ -418,40 +482,19 @@ function ReviewPageContent() {
                 <p className="text-sm font-medium mb-1">何が変わる？</p>
                 <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.summary}</p>
               </div>
-              {/* 現行規約（折りたたみ） */}
-              <div>
-                <button onClick={() => setShowCurrentText(!showCurrentText)} className="text-sm font-medium flex items-center gap-1 mb-2">
-                  現行規約テキスト {showCurrentText ? "\u25B2" : "\u25BC"}
-                </button>
-                {showCurrentText && (
-                  <div className="p-3 rounded-lg bg-red-50 border border-red-100">
-                    <p className="text-xs font-medium text-red-700 mb-1">現行（変更前）</p>
-                    <p className="text-sm text-red-900 whitespace-pre-line">{selectedArticle.original ?? "（規定なし）"}</p>
-                  </div>
-                )}
-              </div>
-              {/* AIドラフト */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium">AI ドラフト</p>
-                  {isDraftEdited && <Button variant="outline" size="sm" onClick={handleDraftSave} className="text-xs">編集を保存</Button>}
-                </div>
-                {selectedArticle.draft ? (
-                  <textarea value={currentDraftText} onChange={(e) => handleDraftEdit(e.target.value)}
-                    className="w-full text-sm p-3 border rounded-lg bg-blue-50 border-blue-100 text-blue-900 resize-none min-h-[120px] focus:outline-none focus:ring-2 focus:ring-ring" />
-                ) : (
-                  <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
-                    <p className="text-sm text-muted-foreground">ドラフトが未生成です。下のボタンでAIにドラフトを生成させてください。</p>
-                  </div>
-                )}
-                <Button onClick={handleGenerateDraft} disabled={isDraftLoading} variant="outline" size="sm" className="w-full mt-2">
-                  {isDraftLoading ? (
-                    <span className="flex items-center gap-2"><Spinner />{selectedArticle.draft ? "再生成中..." : "AIドラフト生成中..."}</span>
-                  ) : selectedArticle.draft ? "AIドラフトを再生成" : "AIドラフト生成"}
-                </Button>
-                {draftError && <p className="text-xs text-red-600 mt-1">{draftError}</p>}
-                {selectedArticle.baseRef && <p className="text-xs text-muted-foreground mt-1">出典: {selectedArticle.baseRef}</p>}
-              </div>
+              {/* 新旧対照（差分表示 + 現行 + 改定案の3タブ） */}
+              <ArticleDiffView
+                original={selectedArticle.original}
+                draft={currentDraftText}
+                onDraftEdit={handleDraftEdit}
+                onDraftSave={handleDraftSave}
+                isDraftEdited={isDraftEdited}
+                onGenerateDraft={handleGenerateDraft}
+                isDraftLoading={isDraftLoading}
+                draftError={draftError}
+                baseRef={selectedArticle.baseRef}
+                hasDraft={!!selectedArticle.draft}
+              />
               {/* 変更理由・解説 */}
               {selectedArticle.explanation && (
                 <div>

@@ -691,6 +691,23 @@ export async function patchReviewArticle(
   if (!res.ok) await handleResponseError(res, "レビュー記事の更新に失敗しました");
 }
 
+/**
+ * DELETE /api/review/[projectId]
+ * 指定した条番号のレビュー記事を一括削除する
+ */
+export async function deleteReviewArticlesApi(
+  projectId: string,
+  articleNums: string[],
+): Promise<{ deleted: number }> {
+  const res = await fetch(`/api/review/${encodeURIComponent(projectId)}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ articleNums }),
+  });
+  if (!res.ok) await handleResponseError(res, "レビュー記事の削除に失敗しました");
+  return res.json();
+}
+
 /** 決定イベント適用結果 */
 export interface ReviewDecisionResult {
   articleNum: string;

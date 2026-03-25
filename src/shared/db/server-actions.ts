@@ -280,6 +280,45 @@ export async function getReviewArticles(
  *
  * Firestore のバッチ書き込みは 500 件が上限のため、分割して処理する。
  */
+/**
+ * 指定した条番号のレビュー記事を一括削除する
+ */
+export async function deleteReviewArticles(
+  projectId: string,
+  articleNums: string[],
+): Promise<number> {
+  if (articleNums.length === 0) return 0;
+
+  const db = getAdminDb();
+  const BATCH_LIMIT = 500;
+  let deleted = 0;
+
+  for (let i = 0; i < articleNums.length; i += BATCH_LIMIT) {
+    const chunk = articleNums.slice(i, i + BATCH_LIMIT);
+    const batch = db.batch();
+
+    for (const articleNum of chunk) {
+      const articleId = encodeArticleId(articleNum);
+      const ref = db
+        .collection("projects")
+        .doc(projectId)
+        .collection("reviewArticles")
+        .doc(articleId);
+      batch.delete(ref);
+    }
+
+    await batch.commit();
+    deleted += chunk.length;
+  }
+
+  return deleted;
+}
+
+/**
+ * レビュー記事を一括保存する（バッチ書き込み）
+ *
+ * Firestore のバッチ書き込みは 500 件が上限のため、分割して処理する。
+ */
 export async function batchSaveReviewArticles(
   projectId: string,
   articles: Array<z.infer<typeof ReviewArticleSchema>>,

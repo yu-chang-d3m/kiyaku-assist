@@ -1,8 +1,9 @@
 /**
  * レビュー記事 API
  *
- * GET  /api/review/[projectId] — プロジェクトのレビュー状態を全件取得
- * PATCH /api/review/[projectId] — 単一条文のレビュー記事を部分更新
+ * GET    /api/review/[projectId] — プロジェクトのレビュー状態を全件取得
+ * PATCH  /api/review/[projectId] — 単一条文のレビュー記事を部分更新
+ * DELETE /api/review/[projectId] — 指定した条文を一括削除
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -10,6 +11,7 @@ import * as z from "zod/v4";
 import {
   getReviewArticles,
   saveReviewArticle,
+  deleteReviewArticles,
 } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
 
@@ -129,6 +131,57 @@ export async function PATCH(
     return NextResponse.json({ article: updated });
   } catch (error) {
     logger.error({ error }, "レビュー記事の更新中にエラーが発生");
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error ? error.message : "サーバー内部エラー",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+/** DELETE リクエストボディスキーマ */
+const deleteRequestSchema = z.object({
+  articleNums: z.array(z.string().min(1)).min(1, "削除対象の条番号が必要です"),
+});
+
+/**
+ * DELETE: 指定した条番号のレビュー記事を一括削除する
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> },
+) {
+  try {
+    const { projectId } = await params;
+
+    const body = await request.json();
+    const parsed = deleteRequestSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error:
+            "バリデーションエラー: " +
+            parsed.error.issues.map((i) => i.message).join(", "),
+        },
+        { status: 400 },
+      );
+    }
+
+    const { articleNums } = parsed.data;
+
+    const deleted = await deleteReviewArticles(projectId, articleNums);
+
+    logger.info(
+      { projectId, deleted, articleNums },
+      "レビュー記事を一括削除完了",
+    );
+
+    return NextResponse.json({ deleted });
+  } catch (error) {
+    logger.error({ error }, "レビュー記事の削除中にエラーが発生");
     return NextResponse.json(
       {
         error:

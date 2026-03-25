@@ -13,7 +13,7 @@ import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
 import { useAuth } from "@/shared/auth/auth-context";
 import type { StepId } from "@/shared/journey";
-import { getReviewArticles, patchReviewArticle, decideReview, callDraftSingle, startAutoGenerate } from "@/shared/api-client";
+import { getReviewArticles, patchReviewArticle, decideReview, callDraftSingle, startAutoGenerate, deleteReviewArticlesApi } from "@/shared/api-client";
 import type { ReviewArticle } from "@/shared/db/types";
 import type { GapAnalysisItem } from "@/domains/analysis/types";
 import { useProjectStore, loadProjectId, loadGapResults, saveReviewDecisions, loadReviewDecisions, saveReviewMemos, loadReviewMemos, loadOnboarding } from "@/shared/store";
@@ -81,6 +81,7 @@ function ReviewPageContent() {
   const [editedDrafts, setEditedDrafts] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<FilterType>("all");
   const [importanceFilter, setImportanceFilter] = useState<ImportanceFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
@@ -160,14 +161,21 @@ function ReviewPageContent() {
       return d !== 0 ? d : extractNum(a.articleNum) - extractNum(b.articleNum);
     }), [articles]);
 
+  // 一意なカテゴリ一覧（フィルタ用）
+  const categories = useMemo(() => {
+    const cats = new Set(articles.map((a) => a.category).filter(Boolean));
+    return Array.from(cats).sort();
+  }, [articles]);
+
   const filteredArticles = useMemo(() =>
     sortedArticles.filter((a) => {
       const aid = a.id ?? "";
       if (filter === "undecided" && decisions[aid]) return false;
       if (filter !== "all" && filter !== "undecided" && decisions[aid] !== filter) return false;
       if (importanceFilter !== "all" && a.importance !== importanceFilter) return false;
+      if (categoryFilter !== "all" && a.category !== categoryFilter) return false;
       return true;
-    }), [sortedArticles, filter, importanceFilter, decisions]);
+    }), [sortedArticles, filter, importanceFilter, categoryFilter, decisions]);
 
   // 統計
   const decided = Object.values(decisions).filter(Boolean).length;
@@ -303,6 +311,33 @@ function ReviewPageContent() {
     batchDraftControllerRef.current = controller;
   }
 
+  async function handleDeleteSelected() {
+    if (checkedIds.size === 0) return;
+    const targets = articles.filter((a) => a.id && checkedIds.has(a.id));
+    const names = targets.map((a) => a.articleNum).join("、");
+    if (!confirm(`以下の ${targets.length} 件をレビューから完全に削除します。\n\n${names}\n\nこの操作は取り消せません。よろしいですか？`)) return;
+
+    const pid = loadProjectId();
+    if (!pid) return;
+    try {
+      await deleteReviewArticlesApi(pid, targets.map((a) => a.articleNum));
+      setArticles((prev) => prev.filter((a) => !checkedIds.has(a.id ?? "")));
+      // decisions/memos からも除去
+      const nextD = { ...decisions };
+      const nextM = { ...memos };
+      for (const id of checkedIds) { delete nextD[id]; delete nextM[id]; }
+      setDecisions(nextD);
+      setMemos(nextM);
+      saveReviewDecisions(nextD);
+      saveReviewMemos(nextM);
+      setCheckedIds(new Set());
+      setSelectedId(null);
+    } catch (err) {
+      console.error("条文の削除に失敗:", err);
+      alert("削除に失敗しました: " + (err instanceof Error ? err.message : "不明なエラー"));
+    }
+  }
+
   function handleToggleAll() {
     setCheckedIds(checkedIds.size === filteredArticles.length ? new Set() : new Set(filteredArticles.map((a) => a.id ?? "")));
   }
@@ -398,10 +433,28 @@ function ReviewPageContent() {
           {IMPORTANCE_FILTER_OPTIONS.map((o) => (
             <Button key={o.value} variant={importanceFilter === o.value ? "default" : "outline"} size="sm" onClick={() => setImportanceFilter(o.value)}>{o.label}</Button>
           ))}
+          {categories.length > 1 && (
+            <>
+              <span className="w-px h-6 bg-border mx-1" />
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="text-sm border rounded-md px-2 py-1.5 bg-background"
+              >
+                <option value="all">全カテゴリ</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </>
+          )}
           <span className="w-px h-6 bg-border mx-1" />
           <Button size="sm" variant="outline" onClick={handleApproveAllAi}>AI推奨を全て承認</Button>
           <Button size="sm" variant="outline" onClick={handleBulkAdopt} disabled={checkedIds.size === 0}>
             選択した項目を一括採用 ({checkedIds.size})
+          </Button>
+          <Button size="sm" variant="destructive" onClick={handleDeleteSelected} disabled={checkedIds.size === 0}>
+            選択した項目を削除 ({checkedIds.size})
           </Button>
           <span className="w-px h-6 bg-border mx-1" />
           <Button

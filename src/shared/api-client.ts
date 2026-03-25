@@ -44,11 +44,13 @@ async function handleResponseError(
  *
  * fetch + ReadableStream パターンで SSE を受信する。
  * POST メソッドをサポートするために EventSource ではなく fetch を使用。
+ *
+ * @returns 終端イベント（complete / error）を受信した場合 true
  */
 async function consumeSSE(
   response: Response,
   handlers: Record<string, (data: unknown) => void>,
-): Promise<void> {
+): Promise<boolean> {
   const reader = response.body?.getReader();
   if (!reader) {
     throw new Error("ストリームの読み取りに失敗しました");
@@ -56,6 +58,7 @@ async function consumeSSE(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let receivedTerminal = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -85,6 +88,10 @@ async function consumeSSE(
 
       if (!dataStr) continue;
 
+      if (eventName === "complete" || eventName === "error" || eventName === "done") {
+        receivedTerminal = true;
+      }
+
       try {
         const data = JSON.parse(dataStr);
         const handler = handlers[eventName];
@@ -96,6 +103,8 @@ async function consumeSSE(
       }
     }
   }
+
+  return receivedTerminal;
 }
 
 // ========== Ingestion ==========
@@ -176,7 +185,7 @@ export function startAnalysis(
         return;
       }
 
-      await consumeSSE(res, {
+      const terminated = await consumeSSE(res, {
         progress: (data) => {
           callbacks.onProgress?.(
             data as { current: number; total: number; articleNum: string },
@@ -189,6 +198,13 @@ export function startAnalysis(
           callbacks.onError?.((data as { message: string }).message);
         },
       });
+
+      // SSE 接続が complete/error なしに切れた場合のフォールバック
+      if (!terminated) {
+        callbacks.onError?.(
+          "サーバーとの接続が切れました。処理は完了している可能性があります。ページを再読み込みしてください。",
+        );
+      }
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
       callbacks.onError?.(
@@ -281,7 +297,7 @@ export function startAutoGenerate(
         return;
       }
 
-      await consumeSSE(res, {
+      const terminated = await consumeSSE(res, {
         progress: (data) => {
           callbacks.onProgress?.(
             data as { current: number; total: number; articleNum: string; phase: "retrieval" | "generation" | "retry" },
@@ -294,6 +310,12 @@ export function startAutoGenerate(
           callbacks.onError?.((data as { message: string }).message);
         },
       });
+
+      if (!terminated) {
+        callbacks.onError?.(
+          "サーバーとの接続が切れました。処理は完了している可能性があります。ページを再読み込みしてください。",
+        );
+      }
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
       callbacks.onError?.(
@@ -338,7 +360,7 @@ export function startDrafting(
         return;
       }
 
-      await consumeSSE(res, {
+      const terminated = await consumeSSE(res, {
         progress: (data) => {
           callbacks.onProgress?.(
             data as { current: number; total: number; articleNum: string },
@@ -351,6 +373,12 @@ export function startDrafting(
           callbacks.onError?.((data as { message: string }).message);
         },
       });
+
+      if (!terminated) {
+        callbacks.onError?.(
+          "サーバーとの接続が切れました。処理は完了している可能性があります。ページを再読み込みしてください。",
+        );
+      }
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
       callbacks.onError?.(

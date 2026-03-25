@@ -210,6 +210,7 @@ function OnboardingPageContent() {
                 value={selectedValue}
                 onChange={(e) => handleTextChange(e.target.value)}
                 placeholder={question.placeholder}
+                data-test={`onboarding-input-${question.id}`}
                 className="w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && canProceed) handleNext();
@@ -222,6 +223,7 @@ function OnboardingPageContent() {
               <button
                 key={option.value}
                 onClick={() => handleSelect(option.value)}
+                data-test={`onboarding-option-${option.value}`}
                 className={cn(
                   "w-full text-left px-4 py-3 rounded-lg border text-sm transition-colors",
                   selectedValue === option.value
@@ -259,6 +261,7 @@ function OnboardingPageContent() {
                 onClick={handleBack}
                 disabled={currentQ === 0 || submitting}
                 className="flex-1"
+                data-test="onboarding-back"
               >
                 前へ
               </Button>
@@ -266,6 +269,7 @@ function OnboardingPageContent() {
                 onClick={handleNext}
                 disabled={!canProceed || submitting}
                 className="flex-1"
+                data-test="onboarding-next"
               >
                 {submitting ? "作成中..." : isLast ? "始める" : "次へ"}
               </Button>

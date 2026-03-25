@@ -211,7 +211,35 @@ function AnalysisPageContent() {
         // 分析完了 → 自動ドラフト生成フェーズへ
         handleStartDrafting(projectId);
       },
-      onError: (message) => {
+      onError: async (message) => {
+        // 接続切れの場合: サーバー側では完了している可能性があるため Firestore を確認
+        if (message.includes("接続が切れました") && projectId) {
+          try {
+            const { getReviewArticles } = await import("@/shared/api-client");
+            const { articles: saved } = await getReviewArticles(projectId);
+            if (saved && saved.length > 0) {
+              // Firestore に結果がある → 分析+ドラフトは完了済み
+              const recovered: GapAnalysisItem[] = saved.map((a) => ({
+                articleNum: a.articleNum,
+                category: a.category,
+                currentText: a.original,
+                standardText: "",
+                standardRef: a.baseRef ?? "",
+                gapSummary: a.summary,
+                gapType: a.importance === "mandatory" ? "outdated" : "partial",
+                importance: a.importance,
+                rationale: a.explanation ?? "",
+                relatedLawRefs: [],
+              }));
+              setResults(recovered);
+              saveGapResults(recovered);
+              setPhase("done");
+              return;
+            }
+          } catch {
+            // Firestore 取得失敗 → 通常のエラー表示
+          }
+        }
         setErrorMsg(message);
         setPhase("error");
       },
@@ -466,6 +494,39 @@ function AnalysisPageContent() {
               </h3>
               <p className="text-sm text-muted-foreground">{errorMsg}</p>
               <div className="flex flex-col gap-3 mt-4">
+                <Button
+                  onClick={async () => {
+                    const pid = loadProjectId();
+                    if (!pid) { handleStartAnalysis(); return; }
+                    try {
+                      const { getReviewArticles } = await import("@/shared/api-client");
+                      const { articles: saved } = await getReviewArticles(pid);
+                      if (saved && saved.length > 0) {
+                        const recovered: GapAnalysisItem[] = saved.map((a) => ({
+                          articleNum: a.articleNum,
+                          category: a.category,
+                          currentText: a.original,
+                          standardText: "",
+                          standardRef: a.baseRef ?? "",
+                          gapSummary: a.summary,
+                          gapType: a.importance === "mandatory" ? "outdated" : "partial",
+                          importance: a.importance,
+                          rationale: a.explanation ?? "",
+                          relatedLawRefs: [],
+                        }));
+                        setResults(recovered);
+                        saveGapResults(recovered);
+                        setPhase("done");
+                      } else {
+                        handleStartAnalysis();
+                      }
+                    } catch {
+                      handleStartAnalysis();
+                    }
+                  }}
+                >
+                  処理結果を確認する
+                </Button>
                 <Button onClick={handleStartAnalysis} variant="outline">
                   もう一度試す
                 </Button>

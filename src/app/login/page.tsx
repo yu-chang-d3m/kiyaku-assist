@@ -11,8 +11,8 @@
  * - AppHeader を使用してアプリ全体で統一されたヘッダーを表示
  */
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/shared/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,20 @@ import { AppHeader } from "@/components/layout/app-header";
 import { LogIn, Mail, AlertTriangle, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading, configured, signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
 
   const [email, setEmail] = useState("");
@@ -31,9 +44,12 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // 認証済みならトップへリダイレクト
+  // ログイン後のリダイレクト先（AuthGuard が付与した returnUrl、なければ "/"）
+  const returnUrl = searchParams.get("returnUrl") || "/";
+
+  // 認証済みならリダイレクト先へ遷移
   if (configured && !loading && user) {
-    router.replace("/");
+    router.replace(returnUrl);
     return null;
   }
 
@@ -42,7 +58,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await signInWithGoogle();
-      router.push("/");
+      router.push(returnUrl);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "不明なエラーが発生しました";
       setError(`Google サインインに失敗しました: ${message}`);
@@ -61,7 +77,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await signInWithEmail(email, password);
-      router.push("/");
+      router.push(returnUrl);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "不明なエラーが発生しました";
       setError(`ログインに失敗しました: ${message}`);
@@ -84,7 +100,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await signUpWithEmail(email, password);
-      router.push("/");
+      router.push(returnUrl);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "不明なエラーが発生しました";
       setError(`新規登録に失敗しました: ${message}`);
@@ -94,7 +110,7 @@ export default function LoginPage() {
   };
 
   const handleDemoMode = () => {
-    router.push("/");
+    router.push(returnUrl);
   };
 
   // ローディング中
@@ -203,6 +219,7 @@ export default function LoginPage() {
                           onChange={(e) => setEmail(e.target.value)}
                           className="min-h-[44px]"
                           autoComplete="email"
+                          data-test="login-email"
                         />
                       </div>
                       <div className="space-y-2">
@@ -215,6 +232,7 @@ export default function LoginPage() {
                           onChange={(e) => setPassword(e.target.value)}
                           className="min-h-[44px]"
                           autoComplete="current-password"
+                          data-test="login-password"
                         />
                       </div>
                       <Button
@@ -222,6 +240,7 @@ export default function LoginPage() {
                         className="w-full min-h-[44px]"
                         variant="secondary"
                         disabled={submitting}
+                        data-test="login-submit"
                       >
                         {submitting ? (
                           <Loader2 className="size-4 animate-spin" />

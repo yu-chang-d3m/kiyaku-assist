@@ -10,7 +10,7 @@
  */
 
 import { useEffect, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/shared/auth/auth-context";
 import { Loader2 } from "lucide-react";
 
@@ -23,13 +23,16 @@ interface AuthGuardProps {
 export function AuthGuard({ children, redirectTo = "/login" }: AuthGuardProps) {
   const { user, loading, configured } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     // Firebase 設定済みで、ローディング完了後、未認証ならリダイレクト
+    // ログイン後に元のページへ復帰できるよう returnUrl を付与する
     if (configured && !loading && !user) {
-      router.replace(redirectTo);
+      const returnUrl = pathname && pathname !== "/" ? `?returnUrl=${encodeURIComponent(pathname)}` : "";
+      router.replace(`${redirectTo}${returnUrl}`);
     }
-  }, [configured, loading, user, router, redirectTo]);
+  }, [configured, loading, user, router, redirectTo, pathname]);
 
   // Firebase 未設定 → デモモード（ガードなし）
   if (!configured) {

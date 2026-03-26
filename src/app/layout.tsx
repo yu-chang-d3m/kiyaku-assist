@@ -10,9 +10,19 @@ const notoSansJP = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: "キヤクアシスト - マンション管理規約改正AIアシスタント",
+  title: "規約リノベ | マンション管理規約をAIでリノベーション",
   description:
-    "改正区分所有法（2026年4月施行）に対応したマンション管理規約の改正を、AIがステップバイステップで支援します。",
+    "改正区分所有法（2026年4月施行）に完全対応。AIがマンション管理規約の改正案を自動作成。専門家費用の1/100、2〜3時間で完了。",
+  openGraph: {
+    title: "規約リノベ | マンション管理規約をAIでリノベーション",
+    description:
+      "改正区分所有法に完全対応。AIがマンション管理規約の改正案を自動作成。専門家費用の1/100で理事会が主体的に規約改正を進められます。",
+    locale: "ja_JP",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
 };
 
 export default function RootLayout({

@@ -615,6 +615,46 @@ function ReviewPageContent() {
                   </div>
                 </div>
               )}
+              {/* 判断支援情報 */}
+              {(selectedArticle.impactOnResidents || selectedArticle.riskIfUnchanged || selectedArticle.transitionalMeasure || selectedArticle.standardRuleComparison || (selectedArticle.relatedLawRefs && selectedArticle.relatedLawRefs.length > 0)) && (
+                <div className="space-y-3 border-t pt-4">
+                  <p className="text-sm font-semibold">判断支援情報</p>
+                  {selectedArticle.impactOnResidents && (
+                    <div>
+                      <p className="text-xs font-medium text-blue-700 mb-0.5">住民生活への影響</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.impactOnResidents}</p>
+                    </div>
+                  )}
+                  {selectedArticle.riskIfUnchanged && (
+                    <div>
+                      <p className="text-xs font-medium text-red-700 mb-0.5">変更しなかった場合のリスク</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.riskIfUnchanged}</p>
+                    </div>
+                  )}
+                  {selectedArticle.transitionalMeasure && (
+                    <div>
+                      <p className="text-xs font-medium text-amber-700 mb-0.5">経過措置</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.transitionalMeasure}</p>
+                    </div>
+                  )}
+                  {selectedArticle.standardRuleComparison && (
+                    <div>
+                      <p className="text-xs font-medium text-green-700 mb-0.5">標準管理規約との対比</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.standardRuleComparison}</p>
+                    </div>
+                  )}
+                  {selectedArticle.relatedLawRefs && selectedArticle.relatedLawRefs.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-purple-700 mb-0.5">根拠法令</p>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedArticle.relatedLawRefs.map((ref, i) => (
+                          <Badge key={i} variant="outline" className="text-xs">{ref}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {/* 判断ボタン + メモ */}
               <div className="space-y-3 pt-2">
                 <div className="flex gap-3">

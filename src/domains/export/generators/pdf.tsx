@@ -410,6 +410,43 @@ function PdfDocument({
                   <Text style={styles.paragraphLabel}>解説: </Text>
                   {article.explanation}
                 </Text>
+
+                {/* 判断支援情報 */}
+                {(article.impactOnResidents || article.riskIfUnchanged || article.transitionalMeasure || article.standardRuleComparison || (article.relatedLawRefs && article.relatedLawRefs.length > 0)) && (
+                  <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: "#e5e7eb" }}>
+                    <Text style={[styles.sectionTitle, { fontSize: 9 }]}>判断支援情報</Text>
+                    {article.impactOnResidents ? (
+                      <Text style={[styles.paragraph, { fontSize: 9 }]}>
+                        <Text style={styles.paragraphLabel}>住民生活への影響: </Text>
+                        {article.impactOnResidents}
+                      </Text>
+                    ) : null}
+                    {article.riskIfUnchanged ? (
+                      <Text style={[styles.paragraph, { fontSize: 9 }]}>
+                        <Text style={styles.paragraphLabel}>変更しなかった場合のリスク: </Text>
+                        {article.riskIfUnchanged}
+                      </Text>
+                    ) : null}
+                    {article.transitionalMeasure ? (
+                      <Text style={[styles.paragraph, { fontSize: 9 }]}>
+                        <Text style={styles.paragraphLabel}>経過措置: </Text>
+                        {article.transitionalMeasure}
+                      </Text>
+                    ) : null}
+                    {article.standardRuleComparison ? (
+                      <Text style={[styles.paragraph, { fontSize: 9 }]}>
+                        <Text style={styles.paragraphLabel}>標準管理規約との対比: </Text>
+                        {article.standardRuleComparison}
+                      </Text>
+                    ) : null}
+                    {article.relatedLawRefs && article.relatedLawRefs.length > 0 ? (
+                      <Text style={[styles.paragraph, { fontSize: 9 }]}>
+                        <Text style={styles.paragraphLabel}>根拠法令: </Text>
+                        {article.relatedLawRefs.join("、")}
+                      </Text>
+                    ) : null}
+                  </View>
+                )}
               </View>
             ))}
           </View>

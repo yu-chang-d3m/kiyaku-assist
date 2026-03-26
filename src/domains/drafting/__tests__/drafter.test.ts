@@ -61,6 +61,10 @@ function createMockDraftOutput(articleNum: string = "第3条") {
     summary: "改定内容の要約テスト",
     explanation: "改定理由の解説テスト",
     baseRef: `標準管理規約 ${articleNum}`,
+    impactOnResidents: "日常生活への直接的な影響はありません",
+    riskIfUnchanged: "現行規定でも大きなリスクはありません",
+    transitionalMeasure: "経過措置は不要です。改定後即日適用できます。",
+    standardRuleComparison: "標準管理規約と同一の内容です",
   };
 }
 
@@ -91,6 +95,10 @@ describe("Drafter — generateDraft", () => {
       importance: "optional",
       baseRef: "標準管理規約 第3条",
       category: "遵守義務",
+      impactOnResidents: "日常生活への直接的な影響はありません",
+      riskIfUnchanged: "現行規定でも大きなリスクはありません",
+      transitionalMeasure: "経過措置は不要です。改定後即日適用できます。",
+      standardRuleComparison: "標準管理規約と同一の内容です",
     });
   });
 
@@ -154,6 +162,10 @@ describe("Drafter — generateDraft", () => {
         importance: "optional",
         baseRef: "標準管理規約 第3条",
         category: "遵守義務",
+        impactOnResidents: "",
+        riskIfUnchanged: "",
+        transitionalMeasure: "",
+        standardRuleComparison: "",
       };
       mockGetCachedResponse.mockResolvedValue(cachedResult);
 

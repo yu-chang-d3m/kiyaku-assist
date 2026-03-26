@@ -45,6 +45,11 @@ export function toExportArticle(article: ReviewArticle): ExportArticle {
     importance: article.importance,
     decision: article.decision,
     baseRef: article.baseRef,
+    relatedLawRefs: article.relatedLawRefs,
+    impactOnResidents: article.impactOnResidents,
+    riskIfUnchanged: article.riskIfUnchanged,
+    transitionalMeasure: article.transitionalMeasure,
+    standardRuleComparison: article.standardRuleComparison,
   };
 }
 

@@ -34,6 +34,11 @@ const CSV_HEADERS = [
   "要約",
   "解説",
   "準拠先",
+  "住民生活への影響",
+  "変更しなかった場合のリスク",
+  "経過措置",
+  "標準管理規約との対比",
+  "根拠法令",
 ] as const;
 
 export class CsvGenerator implements ExportGenerator {
@@ -73,6 +78,11 @@ export class CsvGenerator implements ExportGenerator {
         this.escapeCsv(article.summary),
         this.escapeCsv(article.explanation),
         this.escapeCsv(article.baseRef),
+        this.escapeCsv(article.impactOnResidents ?? ""),
+        this.escapeCsv(article.riskIfUnchanged ?? ""),
+        this.escapeCsv(article.transitionalMeasure ?? ""),
+        this.escapeCsv(article.standardRuleComparison ?? ""),
+        this.escapeCsv(article.relatedLawRefs?.join("、") ?? ""),
       ];
 
       rows.push(row.join(","));

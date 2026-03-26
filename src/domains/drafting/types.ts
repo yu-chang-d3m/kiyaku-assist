@@ -50,6 +50,14 @@ export interface DraftResult {
   baseRef: string;
   /** 章名 */
   category: string;
+  /** 住民生活への影響（具体的に何が変わるか） */
+  impactOnResidents: string;
+  /** 変更しなかった場合のリスク */
+  riskIfUnchanged: string;
+  /** 経過措置の要否と内容 */
+  transitionalMeasure: string;
+  /** 標準管理規約との対比説明 */
+  standardRuleComparison: string;
 }
 
 /** バッチドラフト生成結果 */

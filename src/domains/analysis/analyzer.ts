@@ -38,16 +38,18 @@ const GAP_ANALYSIS_TOOL = {
       },
       gapSummary: {
         type: "string" as const,
-        description: "ギャップの概要（200文字以内）",
+        description: "ギャップの概要（200文字以内）。空文字不可。準拠済みの場合も「現行規約は標準管理規約に準拠しています」等の内容を記載すること。",
+        minLength: 1,
       },
       rationale: {
         type: "string" as const,
-        description: "改正の理由・背景（組合員に説明できるレベル）",
+        description: "改正の理由・背景（組合員に説明できるレベル）。空文字不可。準拠済みの場合も現行規約が適合している理由を記載すること。",
+        minLength: 1,
       },
       relatedLawRefs: {
         type: "array" as const,
         items: { type: "string" as const },
-        description: "関連する改正区分所有法の条文番号",
+        description: "関連する改正区分所有法の条文番号（例: '区分所有法第39条'）。直接関連する条文がない場合は空配列。",
       },
     },
     required: ["gapType", "importance", "gapSummary", "rationale", "relatedLawRefs"],
@@ -112,7 +114,12 @@ function buildSystemPrompt(documentType: DocumentType): string {
 分析の観点:
 1. 改正区分所有法（2025年10月施行）への適合性
 2. 標準管理規約との乖離度
-3. 実務上の重要性（mandatory: 法令違反のリスクあり、recommended: 対応推奨、optional: 対応任意）`;
+3. 実務上の重要性（mandatory: 法令違反のリスクあり、recommended: 対応推奨、optional: 対応任意）
+
+重要: 全てのフィールドに具体的な内容を必ず記入してください。空文字は不可です。
+- gapSummary: 準拠済み(compliant)の場合も「現行規約は標準管理規約に準拠しています」等を記載
+- rationale: 準拠済みの場合も適合している理由を記載
+- relatedLawRefs: 関連する区分所有法の条文番号を配列で返す（関連なしの場合は空配列 []）`;
   }
 }
 
@@ -217,16 +224,18 @@ const BATCH_GAP_ANALYSIS_TOOL = {
             },
             gapSummary: {
               type: "string" as const,
-              description: "ギャップの概要（200文字以内）",
+              description: "ギャップの概要（200文字以内）。空文字不可。準拠済みの場合も「現行規約は標準管理規約に準拠しています」等の内容を記載すること。",
+              minLength: 1,
             },
             rationale: {
               type: "string" as const,
-              description: "改正の理由・背景（組合員に説明できるレベル）",
+              description: "改正の理由・背景（組合員に説明できるレベル）。空文字不可。準拠済みの場合も現行規約が適合している理由を記載すること。",
+              minLength: 1,
             },
             relatedLawRefs: {
               type: "array" as const,
               items: { type: "string" as const },
-              description: "関連する改正区分所有法の条文番号",
+              description: "関連する改正区分所有法の条文番号（例: '区分所有法第39条'）。直接関連する条文がない場合は空配列。",
             },
           },
           required: ["articleNum", "gapType", "importance", "gapSummary", "rationale", "relatedLawRefs"],

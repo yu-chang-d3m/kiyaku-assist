@@ -22,28 +22,52 @@ import type {
 /** ドラフト生成の構造化出力スキーマ */
 const DRAFT_TOOL = {
   name: "output_draft" as const,
-  description: "改定条文ドラフトと解説を構造化して出力する",
+  description: "改定条文ドラフトと解説を構造化して出力する。全フィールドに具体的な内容を記入すること。空文字は不可。",
   input_schema: {
     type: "object" as const,
     properties: {
       draft: {
         type: "string" as const,
         description: "改定条文の全文（項・号を含む正式な条文形式）",
+        minLength: 1,
       },
       summary: {
         type: "string" as const,
         description: "改定内容の要約（100文字以内、組合員向け）",
+        minLength: 1,
       },
       explanation: {
         type: "string" as const,
         description: "改定理由・解説（組合員が理解できる平易な表現）",
+        minLength: 1,
       },
       baseRef: {
         type: "string" as const,
         description: "準拠する標準管理規約等の参照先（例: 標準管理規約 第12条）",
+        minLength: 1,
+      },
+      impactOnResidents: {
+        type: "string" as const,
+        description: "住民生活への影響（この改定により住民の日常生活で具体的に何が変わるか。変化がない場合は「日常生活への直接的な影響はありません」等と記載）",
+        minLength: 1,
+      },
+      riskIfUnchanged: {
+        type: "string" as const,
+        description: "変更しなかった場合のリスク（法的リスク、実務上の問題、管理運営への影響など。リスクがない場合は「現行規定でも大きなリスクはありませんが、標準管理規約との整合性の観点から改定を推奨します」等と記載）",
+        minLength: 1,
+      },
+      transitionalMeasure: {
+        type: "string" as const,
+        description: "経過措置の要否と内容（即日適用可能な場合は「経過措置は不要です。改定後即日適用できます。」と記載。既存の権利に影響がある場合は具体的な猶予期間を提案）",
+        minLength: 1,
+      },
+      standardRuleComparison: {
+        type: "string" as const,
+        description: "標準管理規約との対比（改定案が標準管理規約と同一か、独自の修正を加えているか。独自修正がある場合はその理由を記載）",
+        minLength: 1,
       },
     },
-    required: ["draft", "summary", "explanation", "baseRef"],
+    required: ["draft", "summary", "explanation", "baseRef", "impactOnResidents", "riskIfUnchanged", "transitionalMeasure", "standardRuleComparison"],
   },
 };
 
@@ -54,6 +78,10 @@ interface DraftOutput {
   summary: string;
   explanation: string;
   baseRef: string;
+  impactOnResidents: string;
+  riskIfUnchanged: string;
+  transitionalMeasure: string;
+  standardRuleComparison: string;
 }
 
 // ---------- 文書種別別プロンプト ----------
@@ -67,7 +95,9 @@ function buildDraftSystemPrompt(
 ): string {
   const corporateNote = condoType === "corporate" ? "法人格を持つ" : "法人格を持たない";
   const commonRules = `5. 解説は組合員（法律の専門家ではない一般の方）が理解できる平易な表現にする
-6. 法的助言は行わない（弁護士法72条に留意）`;
+6. 法的助言は行わない（弁護士法72条に留意）
+7. 全ての出力フィールドに具体的な内容を必ず記入する（空文字は不可）
+8. 住民生活への影響、変更しなかった場合のリスク、経過措置の要否、標準管理規約との対比を必ず記載する`;
 
   switch (documentType) {
     case "usage-rules":
@@ -184,6 +214,10 @@ ${request.standardText}
     importance: request.importance,
     baseRef: result.baseRef,
     category: request.category,
+    impactOnResidents: result.impactOnResidents || "",
+    riskIfUnchanged: result.riskIfUnchanged || "",
+    transitionalMeasure: result.transitionalMeasure || "",
+    standardRuleComparison: result.standardRuleComparison || "",
   };
 
   // キャッシュ保存

@@ -74,6 +74,18 @@ export interface ReviewArticle {
   category: string;
   /** AI による推奨判断 */
   aiRecommendation?: "adopted" | "modified" | "pending" | null;
+  /** ギャップの種類 */
+  gapType?: "missing" | "outdated" | "partial" | "compliant" | "custom";
+  /** 改正区分所有法との関連条文 */
+  relatedLawRefs?: string[];
+  /** 住民生活への影響 */
+  impactOnResidents?: string;
+  /** 変更しなかった場合のリスク */
+  riskIfUnchanged?: string;
+  /** 経過措置の要否と内容 */
+  transitionalMeasure?: string;
+  /** 標準管理規約との対比説明 */
+  standardRuleComparison?: string;
   /** 更新日時（Firestore サーバータイムスタンプ） */
   updatedAt?: string;
 }

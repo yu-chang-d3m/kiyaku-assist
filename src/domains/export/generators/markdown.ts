@@ -98,6 +98,33 @@ export class MarkdownGenerator implements ExportGenerator {
         lines.push("");
         lines.push(`**解説:** ${article.explanation}`);
         lines.push("");
+
+        // 判断支援情報
+        if (article.impactOnResidents || article.riskIfUnchanged || article.transitionalMeasure || article.standardRuleComparison || (article.relatedLawRefs && article.relatedLawRefs.length > 0)) {
+          lines.push("#### 判断支援情報");
+          lines.push("");
+          if (article.impactOnResidents) {
+            lines.push(`**住民生活への影響:** ${article.impactOnResidents}`);
+            lines.push("");
+          }
+          if (article.riskIfUnchanged) {
+            lines.push(`**変更しなかった場合のリスク:** ${article.riskIfUnchanged}`);
+            lines.push("");
+          }
+          if (article.transitionalMeasure) {
+            lines.push(`**経過措置:** ${article.transitionalMeasure}`);
+            lines.push("");
+          }
+          if (article.standardRuleComparison) {
+            lines.push(`**標準管理規約との対比:** ${article.standardRuleComparison}`);
+            lines.push("");
+          }
+          if (article.relatedLawRefs && article.relatedLawRefs.length > 0) {
+            lines.push(`**根拠法令:** ${article.relatedLawRefs.join("、")}`);
+            lines.push("");
+          }
+        }
+
         lines.push("---");
         lines.push("");
       }

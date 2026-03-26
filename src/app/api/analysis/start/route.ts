@@ -156,6 +156,8 @@ export async function POST(request: NextRequest) {
             modificationHistory: [] as string[],
             memo: "",
             category: item.category,
+            gapType: item.gapType,
+            relatedLawRefs: item.relatedLawRefs,
           }));
 
           // 分析に失敗した条文もプレースホルダーとして保存

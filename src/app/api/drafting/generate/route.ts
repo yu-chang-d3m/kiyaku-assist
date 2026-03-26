@@ -138,6 +138,10 @@ export async function POST(request: NextRequest) {
               modificationHistory: [] as string[],
               memo: "",
               category: draft.category,
+              impactOnResidents: draft.impactOnResidents,
+              riskIfUnchanged: draft.riskIfUnchanged,
+              transitionalMeasure: draft.transitionalMeasure,
+              standardRuleComparison: draft.standardRuleComparison,
             };
           });
 

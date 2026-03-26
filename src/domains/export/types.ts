@@ -26,6 +26,16 @@ export interface ExportArticle {
   decision: "adopted" | "modified" | "pending" | null;
   /** 準拠する標準管理規約等の参照先 */
   baseRef: string;
+  /** 改正区分所有法との関連条文 */
+  relatedLawRefs?: string[];
+  /** 住民生活への影響 */
+  impactOnResidents?: string;
+  /** 変更しなかった場合のリスク */
+  riskIfUnchanged?: string;
+  /** 経過措置の要否と内容 */
+  transitionalMeasure?: string;
+  /** 標準管理規約との対比説明 */
+  standardRuleComparison?: string;
 }
 
 /** エクスポート設定 */

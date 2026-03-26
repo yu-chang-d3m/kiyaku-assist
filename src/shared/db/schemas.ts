@@ -46,5 +46,11 @@ export const ReviewArticleSchema = z.object({
   memo: z.string().default(""),
   category: z.string(),
   aiRecommendation: z.enum(["adopted", "modified", "pending"]).nullable().optional(),
+  gapType: z.enum(["missing", "outdated", "partial", "compliant", "custom"]).optional(),
+  relatedLawRefs: z.array(z.string()).optional(),
+  impactOnResidents: z.string().optional(),
+  riskIfUnchanged: z.string().optional(),
+  transitionalMeasure: z.string().optional(),
+  standardRuleComparison: z.string().optional(),
   updatedAt: z.string().optional(),
 });

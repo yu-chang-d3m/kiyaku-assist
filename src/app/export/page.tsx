@@ -13,8 +13,9 @@
  * - 印刷用スタイルの考慮
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { diffChars } from "diff";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -47,6 +48,48 @@ import {
   groupExportArticlesByChapter,
   toExportArticle,
 } from "@/domains/export/presentation";
+
+// ---------- 差分ハイライト（印刷プレビュー用） ----------
+
+/** 現行規約セル: 削除部分を赤+取り消し線でハイライト */
+function PrintOriginalDiff({ original, draft }: { original: string; draft: string }) {
+  const parts = useMemo(() => diffChars(original, draft), [original, draft]);
+  return (
+    <td className="border border-gray-300 p-2 align-top whitespace-pre-wrap">
+      {parts.map((part, i) => {
+        if (part.added) return null;
+        if (part.removed) {
+          return (
+            <span key={i} className="bg-red-200 text-red-900 line-through">
+              {part.value}
+            </span>
+          );
+        }
+        return <span key={i}>{part.value}</span>;
+      })}
+    </td>
+  );
+}
+
+/** 改定案セル: 追加部分を緑+下線でハイライト */
+function PrintDraftDiff({ original, draft }: { original: string; draft: string }) {
+  const parts = useMemo(() => diffChars(original, draft), [original, draft]);
+  return (
+    <td className="border border-gray-300 p-2 align-top whitespace-pre-wrap">
+      {parts.map((part, i) => {
+        if (part.removed) return null;
+        if (part.added) {
+          return (
+            <span key={i} className="bg-green-200 text-green-900 underline">
+              {part.value}
+            </span>
+          );
+        }
+        return <span key={i}>{part.value}</span>;
+      })}
+    </td>
+  );
+}
 
 // ---------- 型定義 ----------
 
@@ -382,6 +425,19 @@ function ExportPageContent() {
           </p>
           <p className="text-sm text-gray-600 mb-4">対象条文数: {articles.length} 条</p>
 
+          {/* 凡例 */}
+          <div className="flex gap-4 mb-4 border border-gray-200 rounded p-2 bg-gray-50 text-xs">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-3 h-3 rounded-sm bg-red-200" /> 削除（取り消し線）
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-3 h-3 rounded-sm bg-green-200" /> 追加（下線）
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-3 h-3 rounded-sm border border-gray-300 bg-white" /> 変更なし
+            </span>
+          </div>
+
           {groupExportArticlesByChapter(articles.map(toExportArticle)).map((chapter) => (
             <div key={chapter.chapter} className="mb-5">
               <h2 className="text-base font-bold border-b-2 border-gray-800 pb-1 mb-3">
@@ -418,7 +474,7 @@ function ExportPageContent() {
 
                   {article.original ? (
                     <div className="mb-3">
-                      <p className="text-xs font-medium mb-1">新旧対照表</p>
+                      <p className="text-xs font-medium mb-1">新旧対照表（変更箇所ハイライト）</p>
                       <table className="w-full text-xs border-collapse">
                         <thead>
                           <tr>
@@ -432,12 +488,8 @@ function ExportPageContent() {
                         </thead>
                         <tbody>
                           <tr>
-                            <td className="border border-gray-300 p-2 align-top whitespace-pre-wrap">
-                              {article.original}
-                            </td>
-                            <td className="border border-gray-300 p-2 align-top whitespace-pre-wrap">
-                              {article.draft}
-                            </td>
+                            <PrintOriginalDiff original={article.original} draft={article.draft} />
+                            <PrintDraftDiff original={article.original} draft={article.draft} />
                           </tr>
                         </tbody>
                       </table>
@@ -445,7 +497,7 @@ function ExportPageContent() {
                   ) : (
                     <div className="mb-3">
                       <p className="text-xs font-medium mb-1">改定案（新規追加）</p>
-                      <p className="text-sm whitespace-pre-wrap">{article.draft}</p>
+                      <p className="text-sm whitespace-pre-wrap bg-green-200 text-green-900 underline">{article.draft}</p>
                     </div>
                   )}
 

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { diffChars } from "diff";
 import {
   Document,
   Font,
@@ -31,6 +32,47 @@ const PDF_FONT_CANDIDATES = [
 ].filter((path): path is string => Boolean(path));
 
 let fontRegistered = false;
+
+// ---------- 差分ハイライト用スタイル ----------
+
+const diffStyles = StyleSheet.create({
+  removed: {
+    color: "#991b1b",
+    backgroundColor: "#fecaca",
+    textDecoration: "line-through",
+  },
+  added: {
+    color: "#166534",
+    backgroundColor: "#dcfce7",
+    textDecoration: "underline",
+  },
+  legendBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  legendSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+  },
+  legendLabel: {
+    fontSize: 8,
+    color: "#4b5563",
+  },
+  legendContainer: {
+    flexDirection: "row",
+    gap: 16,
+    marginBottom: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 4,
+    backgroundColor: "#f9fafb",
+  },
+});
 
 const styles = StyleSheet.create({
   page: {
@@ -170,6 +212,103 @@ function formatDate(options: ExportOptions): string | null {
   return new Date().toLocaleDateString("ja-JP");
 }
 
+// ---------- 差分ハイライトコンポーネント ----------
+
+/**
+ * 現行規約セル用の差分テキスト
+ *
+ * 削除された部分を赤背景+取り消し線でハイライトする。
+ * 追加された部分は表示しない（改定案側に表示される）。
+ */
+function OriginalDiffText({
+  original,
+  draft,
+}: {
+  original: string;
+  draft: string;
+}) {
+  const parts = diffChars(original, draft);
+
+  return (
+    <Text style={styles.compareCell}>
+      {parts.map((part, i) => {
+        if (part.added) return null;
+        if (part.removed) {
+          return (
+            <Text key={i} style={diffStyles.removed}>
+              {part.value}
+            </Text>
+          );
+        }
+        return <Text key={i}>{part.value}</Text>;
+      })}
+    </Text>
+  );
+}
+
+/**
+ * 改定案セル用の差分テキスト
+ *
+ * 追加された部分を緑背景+下線でハイライトする。
+ * 削除された部分は表示しない（現行規約側に表示される）。
+ */
+function DraftDiffText({
+  original,
+  draft,
+}: {
+  original: string;
+  draft: string;
+}) {
+  const parts = diffChars(original, draft);
+
+  return (
+    <Text style={styles.compareCellLast}>
+      {parts.map((part, i) => {
+        if (part.removed) return null;
+        if (part.added) {
+          return (
+            <Text key={i} style={diffStyles.added}>
+              {part.value}
+            </Text>
+          );
+        }
+        return <Text key={i}>{part.value}</Text>;
+      })}
+    </Text>
+  );
+}
+
+/** 差分の凡例 */
+function DiffLegend() {
+  return (
+    <View style={diffStyles.legendContainer}>
+      <View style={diffStyles.legendBox}>
+        <View
+          style={[diffStyles.legendSwatch, { backgroundColor: "#fecaca" }]}
+        />
+        <Text style={diffStyles.legendLabel}>削除（取り消し線）</Text>
+      </View>
+      <View style={diffStyles.legendBox}>
+        <View
+          style={[diffStyles.legendSwatch, { backgroundColor: "#dcfce7" }]}
+        />
+        <Text style={diffStyles.legendLabel}>追加（下線）</Text>
+      </View>
+      <View style={diffStyles.legendBox}>
+        <View
+          style={[
+            diffStyles.legendSwatch,
+            { backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#d1d5db" },
+          ]}
+        />
+        <Text style={diffStyles.legendLabel}>変更なし</Text>
+      </View>
+    </View>
+  );
+}
+
+// ---------- PDF ドキュメント ----------
+
 function PdfDocument({
   articles,
   options,
@@ -184,9 +323,15 @@ function PdfDocument({
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>{options.condoName} 管理規約改定案</Text>
-        {generatedAt ? <Text style={styles.meta}>生成日: {generatedAt}</Text> : null}
+        {generatedAt ? (
+          <Text style={styles.meta}>生成日: {generatedAt}</Text>
+        ) : null}
         <Text style={styles.meta}>対象条文数: {articles.length} 条</Text>
+
         <View style={styles.divider} />
+
+        {/* 差分の凡例 */}
+        <DiffLegend />
 
         {chapters.map((chapter) => (
           <View key={chapter.chapter} wrap>
@@ -195,7 +340,11 @@ function PdfDocument({
             </Text>
 
             {chapter.articles.map((article) => (
-              <View key={`${chapter.chapter}-${article.articleNum}`} style={styles.articleBlock} wrap>
+              <View
+                key={`${chapter.chapter}-${article.articleNum}`}
+                style={styles.articleBlock}
+                wrap
+              >
                 <Text style={styles.articleTitle}>{article.articleNum}</Text>
 
                 <View style={styles.metaTable}>
@@ -220,22 +369,36 @@ function PdfDocument({
 
                 {article.original ? (
                   <View>
-                    <Text style={styles.sectionTitle}>新旧対照表</Text>
+                    <Text style={styles.sectionTitle}>
+                      新旧対照表（変更箇所ハイライト）
+                    </Text>
                     <View style={styles.compareTable}>
                       <View style={styles.compareHeader}>
                         <Text style={styles.compareCell}>現行規約</Text>
                         <Text style={styles.compareCellLast}>改定案</Text>
                       </View>
                       <View style={styles.compareBody}>
-                        <Text style={styles.compareCell}>{article.original}</Text>
-                        <Text style={styles.compareCellLast}>{article.draft}</Text>
+                        <OriginalDiffText
+                          original={article.original}
+                          draft={article.draft}
+                        />
+                        <DraftDiffText
+                          original={article.original}
+                          draft={article.draft}
+                        />
                       </View>
                     </View>
                   </View>
                 ) : (
                   <View>
-                    <Text style={styles.sectionTitle}>改定案（新規追加）</Text>
-                    <Text style={styles.paragraph}>{article.draft}</Text>
+                    <Text style={styles.sectionTitle}>
+                      改定案（新規追加）
+                    </Text>
+                    <Text
+                      style={[styles.paragraph, diffStyles.added]}
+                    >
+                      {article.draft}
+                    </Text>
                   </View>
                 )}
 

@@ -11,6 +11,11 @@ import type {
   ExportResult,
   ExportGenerator,
 } from "@/domains/export/types";
+import {
+  applyExportFilter,
+  getDecisionLabel,
+  getImportanceLabel,
+} from "@/domains/export/presentation";
 
 // ---------- CSV 設定 ----------
 
@@ -31,25 +36,9 @@ const CSV_HEADERS = [
   "準拠先",
 ] as const;
 
-// ---------- ラベルマッピング ----------
-
-const IMPORTANCE_LABELS: Record<string, string> = {
-  mandatory: "必須",
-  recommended: "推奨",
-  optional: "任意",
-};
-
-const DECISION_LABELS: Record<string, string> = {
-  adopted: "採用",
-  modified: "修正採用",
-  pending: "保留",
-};
-
-// ---------- ジェネレーター ----------
-
 export class CsvGenerator implements ExportGenerator {
   generate(articles: ExportArticle[], options: ExportOptions): ExportResult {
-    const filtered = this.applyFilter(articles, options);
+    const filtered = applyExportFilter(articles, options.filter);
     const content = this.buildCsv(filtered);
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
@@ -61,28 +50,6 @@ export class CsvGenerator implements ExportGenerator {
     };
   }
 
-  /** フィルタを適用 */
-  private applyFilter(
-    articles: ExportArticle[],
-    options: ExportOptions,
-  ): ExportArticle[] {
-    if (!options.filter) return articles;
-    const { filter } = options;
-
-    return articles.filter((a) => {
-      if (filter.decisions && !filter.decisions.includes(a.decision)) {
-        return false;
-      }
-      if (filter.importances && !filter.importances.includes(a.importance)) {
-        return false;
-      }
-      if (filter.chapters && !filter.chapters.includes(a.chapter)) {
-        return false;
-      }
-      return true;
-    });
-  }
-
   /** CSV テキストを構築（BOM 付き） */
   private buildCsv(articles: ExportArticle[]): string {
     const rows: string[] = [];
@@ -92,10 +59,8 @@ export class CsvGenerator implements ExportGenerator {
 
     // データ行
     for (const article of articles) {
-      const importance = IMPORTANCE_LABELS[article.importance] ?? article.importance;
-      const decision = article.decision
-        ? DECISION_LABELS[article.decision] ?? article.decision
-        : "未決定";
+      const importance = getImportanceLabel(article.importance);
+      const decision = getDecisionLabel(article.decision);
 
       const row = [
         String(article.chapter),

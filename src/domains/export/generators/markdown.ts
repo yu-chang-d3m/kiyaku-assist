@@ -11,26 +11,18 @@ import type {
   ExportResult,
   ExportGenerator,
 } from "@/domains/export/types";
-
-// ---------- ラベルマッピング ----------
-
-const IMPORTANCE_LABELS: Record<string, string> = {
-  mandatory: "必須",
-  recommended: "推奨",
-  optional: "任意",
-};
-
-const DECISION_LABELS: Record<string, string> = {
-  adopted: "採用",
-  modified: "修正採用",
-  pending: "保留",
-};
+import {
+  applyExportFilter,
+  getDecisionLabel,
+  getImportanceLabel,
+  groupExportArticlesByChapter,
+} from "@/domains/export/presentation";
 
 // ---------- ジェネレーター ----------
 
 export class MarkdownGenerator implements ExportGenerator {
   generate(articles: ExportArticle[], options: ExportOptions): ExportResult {
-    const filtered = this.applyFilter(articles, options);
+    const filtered = applyExportFilter(articles, options.filter);
     const content = this.buildMarkdown(filtered, options);
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
@@ -40,28 +32,6 @@ export class MarkdownGenerator implements ExportGenerator {
       mimeType: "text/markdown; charset=utf-8",
       articleCount: filtered.length,
     };
-  }
-
-  /** フィルタを適用 */
-  private applyFilter(
-    articles: ExportArticle[],
-    options: ExportOptions,
-  ): ExportArticle[] {
-    if (!options.filter) return articles;
-    const { filter } = options;
-
-    return articles.filter((a) => {
-      if (filter.decisions && !filter.decisions.includes(a.decision)) {
-        return false;
-      }
-      if (filter.importances && !filter.importances.includes(a.importance)) {
-        return false;
-      }
-      if (filter.chapters && !filter.chapters.includes(a.chapter)) {
-        return false;
-      }
-      return true;
-    });
   }
 
   /** Markdown テキストを構築 */
@@ -84,22 +54,21 @@ export class MarkdownGenerator implements ExportGenerator {
     lines.push("");
 
     // 章ごとにグループ化
-    const chapters = this.groupByChapter(articles);
+    const chapters = groupExportArticlesByChapter(articles);
 
-    for (const [chapterNum, chapterArticles] of chapters) {
-      const chapterTitle = chapterArticles[0]?.chapterTitle || `第${chapterNum}章`;
+    for (const chapter of chapters) {
+      const chapterNum = chapter.chapter;
+      const chapterTitle = chapter.chapterTitle || `第${chapterNum}章`;
       lines.push(`## 第${chapterNum}章 ${chapterTitle}`);
       lines.push("");
 
-      for (const article of chapterArticles) {
+      for (const article of chapter.articles) {
         lines.push(`### ${article.articleNum}`);
         lines.push("");
 
         // メタ情報
-        const importance = IMPORTANCE_LABELS[article.importance] ?? article.importance;
-        const decision = article.decision
-          ? DECISION_LABELS[article.decision] ?? article.decision
-          : "未決定";
+        const importance = getImportanceLabel(article.importance);
+        const decision = getDecisionLabel(article.decision);
         lines.push(`| 項目 | 内容 |`);
         lines.push(`|------|------|`);
         lines.push(`| 重要度 | ${importance} |`);
@@ -151,18 +120,5 @@ export class MarkdownGenerator implements ExportGenerator {
     return text
       .replace(/\|/g, "\\|")
       .replace(/\n/g, "<br>");
-  }
-
-  /** 章番号でグループ化 */
-  private groupByChapter(
-    articles: ExportArticle[],
-  ): Map<number, ExportArticle[]> {
-    const map = new Map<number, ExportArticle[]>();
-    for (const article of articles) {
-      const existing = map.get(article.chapter) ?? [];
-      existing.push(article);
-      map.set(article.chapter, existing);
-    }
-    return map;
   }
 }

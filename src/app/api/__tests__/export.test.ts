@@ -1,7 +1,7 @@
 /**
  * Export API 統合テスト
  *
- * POST /api/export — レビュー結果のエクスポート（Markdown / CSV）
+ * POST /api/export — レビュー結果のエクスポート（Markdown / CSV / PDF）
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
@@ -146,6 +146,26 @@ describe("POST /api/export", () => {
     expect(body).toContain("章番号,章名,条番号");
   });
 
+  test("PDF 形式でエクスポートする", async () => {
+    mockGetReviewArticles.mockResolvedValueOnce(SAMPLE_REVIEW_ARTICLES);
+
+    const request = createJsonRequest("/api/export", "POST", {
+      projectId: "test-project-001",
+      condoName: "テストマンション",
+      format: "pdf",
+      includeTimestamp: false,
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/pdf");
+    expect(response.headers.get("Content-Disposition")).toContain("attachment");
+
+    const body = Buffer.from(await response.arrayBuffer());
+    expect(body.subarray(0, 4).toString()).toBe("%PDF");
+  });
+
   // --- フィルタオプション ---
 
   test("decision フィルタで adopted のみ取得する", async () => {
@@ -223,7 +243,7 @@ describe("POST /api/export", () => {
     const request = createJsonRequest("/api/export", "POST", {
       projectId: "test-project-001",
       condoName: "テストマンション",
-      format: "pdf",
+      format: "docx",
       includeTimestamp: false,
     });
 

@@ -514,7 +514,7 @@ export function streamChat(
 export interface ExportRequest {
   projectId: string;
   condoName: string;
-  format: "markdown" | "csv";
+  format: "markdown" | "csv" | "pdf";
   filter?: {
     decisions?: Array<"adopted" | "modified" | "pending" | null>;
     importances?: Array<"mandatory" | "recommended" | "optional">;

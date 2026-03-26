@@ -79,7 +79,14 @@ test.describe("カスタマージャーニー通しテスト", () => {
       await page.locator('[data-test="onboarding-option-yes"]').click();
       await page.locator('[data-test="onboarding-next"]').click();
 
-      // Q5: 総会予定
+      // Q5: 文書種別
+      await expect(
+        page.locator('[data-test="onboarding-option-management-rules"]'),
+      ).toBeVisible();
+      await page.locator('[data-test="onboarding-option-management-rules"]').click();
+      await page.locator('[data-test="onboarding-next"]').click();
+
+      // Q6: 総会予定
       await expect(
         page.locator('[data-test="onboarding-option-3to6months"]'),
       ).toBeVisible();

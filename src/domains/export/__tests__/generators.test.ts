@@ -1,6 +1,7 @@
 import { describe, test, expect } from "vitest";
 import { MarkdownGenerator } from "@/domains/export/generators/markdown";
 import { CsvGenerator } from "@/domains/export/generators/csv";
+import { PdfGenerator } from "@/domains/export/generators/pdf";
 import type { ExportArticle, ExportOptions } from "@/domains/export/types";
 
 // ---------- テストデータ ----------
@@ -88,11 +89,11 @@ describe("MarkdownGenerator", () => {
     expect(result.content).not.toContain("生成日:");
   });
 
-  test("現行規約がある場合は details タグで表示する", () => {
+  test("現行規約がある場合は新旧対照表を表示する", () => {
     const result = generator.generate(SAMPLE_ARTICLES, DEFAULT_OPTIONS);
 
-    expect(result.content).toContain("<details>");
-    expect(result.content).toContain("現行規約（参考）");
+    expect(result.content).toContain("#### 新旧対照表");
+    expect(result.content).toContain("| 現行規約 | 改定案 |");
   });
 
   test("免責メッセージを含む", () => {
@@ -184,9 +185,10 @@ describe("CsvGenerator", () => {
       ...DEFAULT_OPTIONS,
       format: "csv",
     });
+    const content = result.content as string;
 
     // ドラフトに \n が含まれるが、CSV 内ではスペースに置換されている
-    const lines = result.content.split("\r\n");
+    const lines = content.split("\r\n");
     // ヘッダー + 3データ行
     expect(lines.filter((l) => l.length > 0)).toHaveLength(4);
   });
@@ -216,10 +218,55 @@ describe("CsvGenerator", () => {
       ...DEFAULT_OPTIONS,
       format: "csv",
     });
+    const content = result.content as string;
 
     expect(result.articleCount).toBe(0);
     // ヘッダー行のみ
-    const lines = result.content.split("\r\n").filter((l) => l.length > 0);
+    const lines = content.split("\r\n").filter((line) => line.length > 0);
     expect(lines).toHaveLength(1);
+  });
+});
+
+// ---------- PDF ジェネレーター ----------
+
+describe("PdfGenerator", () => {
+  const generator = new PdfGenerator();
+
+  test("PDF を正しく生成する", async () => {
+    const result = await generator.generate(SAMPLE_ARTICLES, {
+      ...DEFAULT_OPTIONS,
+      format: "pdf",
+    });
+
+    expect(result.articleCount).toBe(3);
+    expect(result.mimeType).toBe("application/pdf");
+    expect(result.filename).toContain("テストマンション_規約改定案_");
+    expect(result.filename).toMatch(/\.pdf$/);
+    expect(Buffer.from(result.content).byteLength).toBeGreaterThan(0);
+    expect(Buffer.from(result.content).subarray(0, 4).toString()).toBe("%PDF");
+  });
+
+  test("PDF に Markdown と同じ主要項目を含める", async () => {
+    const result = await generator.generate(SAMPLE_ARTICLES, {
+      ...DEFAULT_OPTIONS,
+      format: "pdf",
+    });
+
+    const { PDFParse } = await import("pdf-parse");
+    const pdf = new PDFParse({ data: Buffer.from(result.content) });
+
+    try {
+      const text = (await pdf.getText()).text;
+
+      expect(text).toContain("テストマンション");
+      expect(text).toContain("第3条");
+      expect(text).toContain("新旧対照表");
+      expect(text).toContain("同居者への遵守義務を追加");
+      expect(text).toContain("標準管理規約第3条");
+      expect(text).toContain("置き配ルールの新設");
+      expect(text).toContain("改正区分所有法対応");
+    } finally {
+      await pdf.destroy().catch(() => {});
+    }
   });
 });

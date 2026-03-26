@@ -27,7 +27,6 @@ import { Separator } from "@/components/ui/separator";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/shared/auth/auth-context";
 import type { StepId } from "@/shared/journey";
 import {
   getReviewArticles,
@@ -39,9 +38,15 @@ import type { ReviewProgress } from "@/domains/review/types";
 import {
   loadProjectId,
   loadReviewDecisions,
-  loadReviewMemos,
+  loadOnboarding,
 } from "@/shared/store";
 import { AuthGuard } from "@/shared/auth/auth-guard";
+import {
+  getDecisionLabel,
+  getImportanceLabel,
+  groupExportArticlesByChapter,
+  toExportArticle,
+} from "@/domains/export/presentation";
 
 // ---------- 型定義 ----------
 
@@ -50,18 +55,11 @@ interface ExportFormat {
   title: string;
   description: string;
   icon: string;
-  format: "markdown" | "csv";
+  format: "markdown" | "csv" | "pdf";
   actionLabel: string;
 }
 
 // ---------- 定数 ----------
-
-/** 判断ラベル */
-const DECISION_LABELS: Record<string, string> = {
-  adopted: "採用",
-  modified: "修正",
-  pending: "保留",
-};
 
 /** エクスポート形式定義 */
 const EXPORT_FORMATS: ExportFormat[] = [
@@ -82,6 +80,15 @@ const EXPORT_FORMATS: ExportFormat[] = [
     icon: "C",
     format: "csv",
     actionLabel: "CSV ダウンロード",
+  },
+  {
+    id: "pdf",
+    title: "PDF（新旧対照表）",
+    description:
+      "Markdown と同じ内容の新旧対照表を PDF ファイルとしてダウンロードします。印刷して配布する用途に向いています。",
+    icon: "P",
+    format: "pdf",
+    actionLabel: "PDF ダウンロード",
   },
 ];
 
@@ -106,12 +113,10 @@ export default function ExportPage() {
 }
 
 function ExportPageContent() {
-  const { user } = useAuth();
-
   const [articles, setArticles] = useState<ReviewArticle[]>([]);
+  const [condoName, setCondoName] = useState("マンション");
   const [progress, setProgress] = useState<ReviewProgress | null>(null);
   const [decisions, setDecisions] = useState<Record<string, "adopted" | "modified" | "pending" | null>>({});
-  const [memos, setMemos] = useState<Record<string, string>>({});
   const [phase, setPhase] = useState<"loading" | "no-data" | "ready">(
     "loading"
   );
@@ -147,6 +152,12 @@ function ExportPageContent() {
       return;
     }
 
+    // onboarding からマンション名を復元
+    const onboarding = loadOnboarding();
+    if (onboarding?.condoName) {
+      setCondoName(onboarding.condoName);
+    }
+
     (async () => {
       try {
         // API からレビュー記事と進捗を並行取得
@@ -178,18 +189,6 @@ function ExportPageContent() {
           }
           setDecisions(d);
         }
-
-        const savedMemos = loadReviewMemos();
-        if (savedMemos) {
-          setMemos(savedMemos);
-        } else {
-          const m: Record<string, string> = {};
-          for (const a of articlesRes.articles) {
-            if (a.id && a.memo) m[a.id] = a.memo;
-          }
-          setMemos(m);
-        }
-
         setPhase("ready");
       } catch (err) {
         console.error("エクスポートデータの読み込みに失敗:", err);
@@ -221,13 +220,14 @@ function ExportPageContent() {
     try {
       const blob = await callExport({
         projectId: pid,
-        condoName: "マンション",
+        condoName,
         format: fmt.format,
         includeTimestamp: true,
       });
 
       const date = new Date().toISOString().split("T")[0];
-      const ext = fmt.format === "csv" ? "csv" : "md";
+      const ext =
+        fmt.format === "csv" ? "csv" : fmt.format === "pdf" ? "pdf" : "md";
       const filename = `管理規約_${fmt.format === "csv" ? "レビュー結果" : "新旧対照表"}_${date}.${ext}`;
 
       downloadBlob(blob, filename);
@@ -376,42 +376,95 @@ function ExportPageContent() {
 
         {/* 印刷用コンテンツ（通常は非表示、print時のみ表示） */}
         <div className="hidden print:block">
-          <h1 className="text-xl font-bold mb-4">
-            管理規約改正案 レビュー結果
-          </h1>
-          <p className="text-sm mb-4">
-            作成日: {new Date().toLocaleDateString("ja-JP")}
+          <h1 className="text-xl font-bold mb-2">{condoName} 管理規約改定案</h1>
+          <p className="text-sm text-gray-600 mb-1">
+            生成日: {new Date().toLocaleDateString("ja-JP")}
           </p>
-          <table className="w-full border-collapse text-sm mb-8">
-            <thead>
-              <tr>
-                <th className="border p-2 text-left bg-gray-100">条文</th>
-                <th className="border p-2 text-left bg-gray-100">カテゴリ</th>
-                <th className="border p-2 text-left bg-gray-100">概要</th>
-                <th className="border p-2 text-left bg-gray-100">判断</th>
-                <th className="border p-2 text-left bg-gray-100">メモ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {articles.map((article) => {
-                const decision = decisions[article.id ?? ""];
-                const memo = memos[article.id ?? ""] ?? "";
-                return (
-                  <tr key={article.id}>
-                    <td className="border p-2">{article.articleNum}</td>
-                    <td className="border p-2">{article.category}</td>
-                    <td className="border p-2">{article.summary}</td>
-                    <td className="border p-2">
-                      {decision
-                        ? DECISION_LABELS[decision] ?? ""
-                        : "未判断"}
-                    </td>
-                    <td className="border p-2">{memo}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <p className="text-sm text-gray-600 mb-4">対象条文数: {articles.length} 条</p>
+
+          {groupExportArticlesByChapter(articles.map(toExportArticle)).map((chapter) => (
+            <div key={chapter.chapter} className="mb-5">
+              <h2 className="text-base font-bold border-b-2 border-gray-800 pb-1 mb-3">
+                第{chapter.chapter}章 {chapter.chapterTitle}
+              </h2>
+
+              {chapter.articles.map((article) => (
+                <div
+                  key={`${chapter.chapter}-${article.articleNum}`}
+                  className="print-article-block border border-gray-300 rounded mb-3 p-3"
+                >
+                  <h3 className="font-bold text-sm mb-2">{article.articleNum}</h3>
+
+                  <table className="w-full text-xs border-collapse mb-3">
+                    <tbody>
+                      <tr>
+                        <th className="text-left border border-gray-300 bg-gray-50 p-2 w-24">重要度</th>
+                        <td className="border border-gray-300 p-2">
+                          {getImportanceLabel(article.importance)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th className="text-left border border-gray-300 bg-gray-50 p-2">判定</th>
+                        <td className="border border-gray-300 p-2">
+                          {getDecisionLabel(article.decision)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th className="text-left border border-gray-300 bg-gray-50 p-2">準拠</th>
+                        <td className="border border-gray-300 p-2">{article.baseRef}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {article.original ? (
+                    <div className="mb-3">
+                      <p className="text-xs font-medium mb-1">新旧対照表</p>
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr>
+                            <th className="text-left border border-gray-300 bg-gray-50 p-2 align-top w-1/2">
+                              現行規約
+                            </th>
+                            <th className="text-left border border-gray-300 bg-gray-50 p-2 align-top w-1/2">
+                              改定案
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td className="border border-gray-300 p-2 align-top whitespace-pre-wrap">
+                              {article.original}
+                            </td>
+                            <td className="border border-gray-300 p-2 align-top whitespace-pre-wrap">
+                              {article.draft}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="mb-3">
+                      <p className="text-xs font-medium mb-1">改定案（新規追加）</p>
+                      <p className="text-sm whitespace-pre-wrap">{article.draft}</p>
+                    </div>
+                  )}
+
+                  <p className="text-xs mb-1">
+                    <span className="font-medium">要約:</span> {article.summary}
+                  </p>
+                  <p className="text-xs">
+                    <span className="font-medium">解説:</span> {article.explanation}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ))}
+
+          {/* フッター */}
+          <div className="mt-6 pt-2 border-t text-xs text-gray-500">
+            <p>※ 本資料はキヤクアシストにより自動生成されたものです。法的助言ではありません。</p>
+            <p>※ 最終的な規約案の決定にあたっては、マンション管理士や弁護士等の専門家にご相談ください。</p>
+          </div>
         </div>
 
         <Separator className="mb-6 print:hidden" />
@@ -486,7 +539,7 @@ function ExportPageContent() {
           <Card>
             <CardContent className="flex items-start gap-4 py-4">
               <span className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 text-primary font-bold text-lg shrink-0 mt-0.5">
-                P
+                印
               </span>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">印刷 / PDF 保存</p>

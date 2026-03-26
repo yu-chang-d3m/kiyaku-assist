@@ -1,7 +1,7 @@
 /**
  * Export ドメインの型定義
  *
- * レビュー結果から各種出力形式（Markdown、CSV）を生成する。
+ * レビュー結果から各種出力形式（Markdown、CSV、PDF）を生成する。
  */
 
 /** エクスポート対象の条文データ */
@@ -33,7 +33,7 @@ export interface ExportOptions {
   /** マンション名 */
   condoName: string;
   /** 出力フォーマット */
-  format: "markdown" | "csv";
+  format: "markdown" | "csv" | "pdf";
   /** 対象条文のフィルタ（未指定で全件） */
   filter?: ExportFilter;
   /** 生成日時を含めるか */
@@ -53,7 +53,7 @@ export interface ExportFilter {
 /** エクスポート結果 */
 export interface ExportResult {
   /** 生成されたコンテンツ */
-  content: string;
+  content: string | Uint8Array;
   /** ファイル名 */
   filename: string;
   /** MIME タイプ */
@@ -65,5 +65,8 @@ export interface ExportResult {
 /** ジェネレーターのインターフェース */
 export interface ExportGenerator {
   /** 条文データからエクスポートファイルを生成する */
-  generate(articles: ExportArticle[], options: ExportOptions): ExportResult;
+  generate(
+    articles: ExportArticle[],
+    options: ExportOptions,
+  ): ExportResult | Promise<ExportResult>;
 }

@@ -10,16 +10,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as z from "zod/v4";
 import { getReviewArticles } from "@/shared/db/server-actions";
-import { MarkdownGenerator, CsvGenerator } from "@/domains/export/generators";
-import type { ExportArticle, ExportOptions } from "@/domains/export/types";
-import type { ReviewArticle } from "@/shared/db/types";
+import {
+  MarkdownGenerator,
+  CsvGenerator,
+  PdfGenerator,
+} from "@/domains/export/generators";
+import type { ExportGenerator, ExportOptions } from "@/domains/export/types";
 import { logger } from "@/shared/observability/logger";
+import { toExportArticle } from "@/domains/export/presentation";
 
 /** リクエストボディのバリデーションスキーマ */
 const exportRequestSchema = z.object({
   projectId: z.string().min(1, "プロジェクトIDは必須です"),
   condoName: z.string().min(1, "マンション名は必須です"),
-  format: z.enum(["markdown", "csv"]),
+  format: z.enum(["markdown", "csv", "pdf"]),
   filter: z
     .object({
       decisions: z
@@ -34,35 +38,11 @@ const exportRequestSchema = z.object({
   includeTimestamp: z.boolean(),
 });
 
-/** 章番号から章名を推定するマッピング（標準管理規約の章構成） */
-const CHAPTER_TITLES: Record<number, string> = {
-  1: "総則",
-  2: "専有部分等の範囲",
-  3: "敷地及び共用部分等の共有",
-  4: "用法",
-  5: "管理",
-  6: "管理組合",
-  7: "会計",
-  8: "雑則",
+const generators: Record<ExportOptions["format"], ExportGenerator> = {
+  markdown: new MarkdownGenerator(),
+  csv: new CsvGenerator(),
+  pdf: new PdfGenerator(),
 };
-
-/**
- * ReviewArticle を ExportArticle に変換する
- */
-function toExportArticle(article: ReviewArticle): ExportArticle {
-  return {
-    chapter: article.chapter,
-    chapterTitle: CHAPTER_TITLES[article.chapter] ?? article.category ?? `第${article.chapter}章`,
-    articleNum: article.articleNum,
-    original: article.original,
-    draft: article.draft,
-    summary: article.summary,
-    explanation: article.explanation,
-    importance: article.importance,
-    decision: article.decision,
-    baseRef: article.baseRef,
-  };
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -113,9 +93,8 @@ export async function POST(request: NextRequest) {
     };
 
     // ジェネレーターを選択して実行
-    const generator =
-      format === "markdown" ? new MarkdownGenerator() : new CsvGenerator();
-    const result = generator.generate(exportArticles, options);
+    const generator = generators[format];
+    const result = await generator.generate(exportArticles, options);
 
     logger.info(
       { projectId, format, articleCount: result.articleCount },
@@ -123,7 +102,12 @@ export async function POST(request: NextRequest) {
     );
 
     // ファイルダウンロード用のレスポンスを返す
-    return new Response(result.content, {
+    const responseBody =
+      typeof result.content === "string"
+        ? result.content
+        : Buffer.from(result.content);
+
+    return new Response(responseBody, {
       status: 200,
       headers: {
         "Content-Type": result.mimeType,

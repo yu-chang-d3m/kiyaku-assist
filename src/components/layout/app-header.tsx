@@ -14,6 +14,16 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/shared/auth/auth-context";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { type StepId } from "@/shared/journey";
 import { JourneyProgress } from "./journey-progress";
 import { LogOut, LogIn, Settings, Trash2, Database } from "lucide-react";
@@ -59,8 +69,9 @@ function SettingsMenu() {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const handleClearCache = useCallback(async () => {
-    if (!confirm("AI キャッシュを削除しますか？\n次回の分析時に再生成されます。")) return;
+  const [confirmTarget, setConfirmTarget] = useState<"cache" | "all" | null>(null);
+
+  const executeClearCache = useCallback(async () => {
     setBusy(true);
     setMessage("");
     try {
@@ -73,15 +84,12 @@ function SettingsMenu() {
     }
   }, []);
 
-  const handleClearAll = useCallback(async () => {
-    if (!confirm("全プロジェクトデータと AI キャッシュを削除しますか？\nこの操作は取り消せません。")) return;
-    if (!confirm("本当に全データを削除してよろしいですか？")) return;
+  const executeClearAll = useCallback(async () => {
     setBusy(true);
     setMessage("");
     try {
       const res = await clearAllData();
       setMessage(`プロジェクト ${res.deletedProjects} 件、キャッシュ ${res.deletedCache} 件を削除しました`);
-      // sessionStorage もクリア
       if (typeof window !== "undefined") sessionStorage.clear();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "削除に失敗しました");
@@ -107,7 +115,7 @@ function SettingsMenu() {
           <p className="text-xs font-medium text-muted-foreground px-2 py-1 mb-1">データ管理</p>
 
           <button
-            onClick={handleClearCache}
+            onClick={() => setConfirmTarget("cache")}
             disabled={busy}
             className="flex items-center gap-2 w-full px-2 py-2 text-sm rounded-md hover:bg-muted transition-colors text-left disabled:opacity-50"
           >
@@ -119,7 +127,7 @@ function SettingsMenu() {
           </button>
 
           <button
-            onClick={handleClearAll}
+            onClick={() => setConfirmTarget("all")}
             disabled={busy}
             className="flex items-center gap-2 w-full px-2 py-2 text-sm rounded-md hover:bg-destructive/10 transition-colors text-left disabled:opacity-50"
           >
@@ -137,6 +145,35 @@ function SettingsMenu() {
           )}
         </div>
       )}
+
+      {/* 確認ダイアログ */}
+      <AlertDialog open={confirmTarget !== null} onOpenChange={(v) => { if (!v) setConfirmTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmTarget === "cache" ? "AI キャッシュを削除" : "全データを削除"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmTarget === "cache"
+                ? "分析・ドラフトの AI キャッシュを削除します。次回の分析時に再生成されます。"
+                : "全プロジェクトデータと AI キャッシュを削除します。この操作は取り消せません。"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              className={confirmTarget === "all" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              onClick={() => {
+                if (confirmTarget === "cache") executeClearCache();
+                else if (confirmTarget === "all") executeClearAll();
+                setConfirmTarget(null);
+              }}
+            >
+              {confirmTarget === "all" ? "全て削除する" : "削除する"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

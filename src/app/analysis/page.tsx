@@ -23,7 +23,7 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
-import { startAnalysis, startAutoGenerate, loadParsedBylawsRemote } from "@/shared/api-client";
+import { startAnalysis, startAutoGenerate, loadParsedBylawsRemote, syncCurrentStep } from "@/shared/api-client";
 import {
   loadParsedBylaws,
   saveGapResults,
@@ -275,11 +275,14 @@ function AnalysisPageContent() {
       },
       onComplete: () => {
         setPhase("done");
+        // 分析+ドラフト完了 → step=3 を記録
+        syncCurrentStep(pid, 3);
       },
       onError: (message) => {
         // ドラフト生成のエラーはワーニングにとどめ、分析結果は残す
         console.error("自動ドラフト生成エラー:", message);
         setPhase("done");
+        syncCurrentStep(pid, 3);
       },
     });
 
@@ -423,8 +426,15 @@ function AnalysisPageContent() {
               </div>
               <Progress value={progressPercent} className="h-2" />
               <p className="text-xs text-muted-foreground">
-                複数条文をまとめてAIが分析します。しばらくお待ちください。
+                複数条文をまとめてAIが分析します。条文数により1〜5分程度かかります。
               </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { controllerRef.current?.abort(); setPhase("error"); setErrorMsg("分析をキャンセルしました"); }}
+              >
+                キャンセル
+              </Button>
             </CardContent>
           </Card>
         </main>
@@ -471,8 +481,24 @@ function AnalysisPageContent() {
               <p className="text-xs text-muted-foreground">
                 分析結果に基づいてAIが改正案のドラフトを生成しています。
                 <br />
-                完了後、レビュー画面に進めます。
+                条文数により3〜10分程度かかります。
               </p>
+              <div className="flex gap-2 justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { draftControllerRef.current?.abort(); setPhase("done"); }}
+                >
+                  スキップしてレビューへ
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { draftControllerRef.current?.abort(); setPhase("error"); setErrorMsg("ドラフト生成をキャンセルしました"); }}
+                >
+                  キャンセル
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </main>

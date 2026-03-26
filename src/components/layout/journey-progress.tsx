@@ -17,10 +17,16 @@ interface JourneyProgressProps {
 
 export function JourneyProgress({ currentStep }: JourneyProgressProps) {
   const currentIndex = JOURNEY_STEPS.findIndex((s) => s.id === currentStep);
+  const currentLabel = JOURNEY_STEPS[currentIndex]?.label ?? "";
 
   return (
     <nav aria-label="規約改正の進捗" className="w-full bg-card border-b">
       <div className="max-w-5xl mx-auto px-4 py-3">
+        {/* モバイル: 現在ステップ名 + N/M 表示 */}
+        <p className="md:hidden text-xs text-center text-muted-foreground mb-2">
+          <span className="font-semibold text-foreground">{currentLabel}</span>
+          {" "}({currentIndex + 1} / {JOURNEY_STEPS.length})
+        </p>
         <ol className="flex items-center gap-1 sm:gap-2">
           {JOURNEY_STEPS.map((step, index) => {
             const isCompleted = index < currentIndex;
@@ -31,11 +37,12 @@ export function JourneyProgress({ currentStep }: JourneyProgressProps) {
                 {/* ステップ番号 */}
                 <div
                   className={cn(
-                    "flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-medium shrink-0",
+                    "flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-medium shrink-0 transition-colors",
                     isCompleted && "bg-primary text-primary-foreground",
                     isCurrent && "bg-primary text-primary-foreground ring-2 ring-primary/30",
                     !isCompleted && !isCurrent && "bg-muted text-muted-foreground",
                   )}
+                  aria-label={`${step.label}${isCompleted ? "（完了）" : isCurrent ? "（現在）" : ""}`}
                 >
                   {isCompleted ? "\u2713" : index + 1}
                 </div>
@@ -54,7 +61,7 @@ export function JourneyProgress({ currentStep }: JourneyProgressProps) {
                 {index < JOURNEY_STEPS.length - 1 && (
                   <div
                     className={cn(
-                      "flex-1 h-0.5 min-w-2",
+                      "flex-1 h-0.5 min-w-2 transition-colors",
                       isCompleted ? "bg-primary" : "bg-muted",
                     )}
                   />

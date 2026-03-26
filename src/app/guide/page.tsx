@@ -23,6 +23,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
+import ReactMarkdown from "react-markdown";
 
 /** FAQ データ */
 const FAQ_ITEMS = [
@@ -156,8 +157,8 @@ export default function GuidePage() {
                 {item.question}
               </AccordionTrigger>
               <AccordionContent>
-                <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-line">
-                  {item.answer}
+                <div className="prose prose-sm max-w-none text-muted-foreground">
+                  <ReactMarkdown>{item.answer}</ReactMarkdown>
                 </div>
               </AccordionContent>
             </AccordionItem>

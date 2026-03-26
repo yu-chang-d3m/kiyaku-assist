@@ -15,6 +15,7 @@ import { useAuth } from "@/shared/auth/auth-context";
 import { listProjects, deleteProjectApi } from "@/shared/api-client";
 import { clearSession, saveProjectId } from "@/shared/store";
 import type { Project } from "@/shared/db/types";
+import { JOURNEY_STEPS, getStepIdByIndex } from "@/shared/journey";
 import { Trash2 } from "lucide-react";
 
 export function ProjectList() {
@@ -70,23 +71,15 @@ export function ProjectList() {
   }
   if (projects.length === 0) return null;
 
-  const stepLabels: Record<number, string> = {
-    0: "オンボーディング",
-    1: "法改正ガイド",
-    2: "規約アップロード",
-    3: "ギャップ分析",
-    4: "改正案レビュー",
-    5: "エクスポート",
-  };
-
-  const stepPaths: Record<number, string> = {
-    0: "/onboarding",
-    1: "/guide",
-    2: "/upload",
-    3: "/analysis",
-    4: "/review",
-    5: "/export",
-  };
+  /** currentStep（数値）から表示ラベルとパスを解決する */
+  function resolveStep(stepIndex: number) {
+    const stepId = getStepIdByIndex(stepIndex);
+    const step = stepId ? JOURNEY_STEPS.find((s) => s.id === stepId) : undefined;
+    return {
+      label: step?.label ?? `ステップ ${stepIndex}`,
+      path: step?.path ?? "/onboarding",
+    };
+  }
 
   return (
     <section className="max-w-5xl mx-auto px-4 py-8">
@@ -95,13 +88,14 @@ export function ProjectList() {
         {projects.map((project) => {
           const pid = project.id ?? "";
           const step = project.currentStep ?? 0;
+          const { label, path } = resolveStep(step);
           return (
             <Card key={pid}>
               <CardContent className="flex items-center justify-between gap-4 py-4">
                 <div className="min-w-0">
                   <p className="font-medium truncate">{project.condoName}</p>
                   <p className="text-xs text-muted-foreground">
-                    進捗: {stepLabels[step] ?? `ステップ ${step}`}
+                    進捗: {label}（{step + 1} / {JOURNEY_STEPS.length}）
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -110,7 +104,7 @@ export function ProjectList() {
                     asChild
                     onClick={() => handleResume(project)}
                   >
-                    <Link href={stepPaths[step] ?? "/onboarding"}>再開</Link>
+                    <Link href={path}>再開</Link>
                   </Button>
                   <Button
                     size="sm"

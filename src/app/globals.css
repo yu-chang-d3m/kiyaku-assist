@@ -124,3 +124,85 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ---------- 印刷用スタイル ---------- */
+@media print {
+  /* 背景色を印刷に反映（差分ハイライト用） */
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* 差分ハイライト: 削除（赤） */
+  .print-diff-removed {
+    background-color: #fee2e2 !important;
+    color: #991b1b !important;
+    text-decoration: line-through;
+    text-decoration-color: #ef4444;
+    text-decoration-thickness: 2px;
+    padding: 0 2px;
+  }
+
+  /* 差分ハイライト: 追加（緑） */
+  .print-diff-added {
+    background-color: #d1fae5 !important;
+    color: #065f46 !important;
+    text-decoration: underline;
+    text-decoration-color: #10b981;
+    text-decoration-thickness: 2px;
+    padding: 0 2px;
+  }
+
+  /* 条文ごとの改ページ制御 */
+  .print-article-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 16px;
+  }
+
+  /* 判定バッジ */
+  .print-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .print-badge-adopted {
+    background-color: #d1fae5 !important;
+    color: #065f46 !important;
+    border: 1px solid #6ee7b7;
+  }
+  .print-badge-modified {
+    background-color: #fef3c7 !important;
+    color: #92400e !important;
+    border: 1px solid #fcd34d;
+  }
+  .print-badge-pending {
+    background-color: #f3f4f6 !important;
+    color: #6b7280 !important;
+    border: 1px solid #d1d5db;
+  }
+  .print-badge-undecided {
+    background-color: #fef2f2 !important;
+    color: #991b1b !important;
+    border: 1px solid #fca5a5;
+  }
+
+  /* 重要度バッジ */
+  .print-badge-mandatory {
+    background-color: #fef2f2 !important;
+    color: #991b1b !important;
+    border: 1px solid #fca5a5;
+  }
+  .print-badge-recommended {
+    background-color: #eff6ff !important;
+    color: #1e40af !important;
+    border: 1px solid #93c5fd;
+  }
+  .print-badge-optional {
+    background-color: #f3f4f6 !important;
+    color: #6b7280 !important;
+    border: 1px solid #d1d5db;
+  }
+}

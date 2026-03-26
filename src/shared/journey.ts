@@ -153,3 +153,14 @@ export function getStepIdByIndex(index: number): StepId | undefined {
 export function getTotalEstimatedMinutes(): number {
   return JOURNEY_STEPS.reduce((sum, step) => sum + step.estimatedMinutes, 0);
 }
+
+/**
+ * ステップ ID からインデックス（0始まり）を取得する
+ *
+ * @param stepId - ステップ ID
+ * @returns ステップインデックス（0-5）、見つからない場合は 0
+ */
+export function getStepIndex(stepId: StepId): number {
+  const index = JOURNEY_STEPS.findIndex((step) => step.id === stepId);
+  return index >= 0 ? index : 0;
+}

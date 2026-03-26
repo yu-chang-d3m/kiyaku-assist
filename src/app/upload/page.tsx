@@ -20,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
-import { callParse, callParseFile, saveParsedBylawsRemote } from "@/shared/api-client";
+import { callParse, callParseFile, saveParsedBylawsRemote, syncCurrentStep } from "@/shared/api-client";
 import type { ParseResult } from "@/domains/ingestion/types";
 import { saveParsedBylaws, loadProjectId } from "@/shared/store";
 import { AuthGuard } from "@/shared/auth/auth-guard";
@@ -473,6 +473,8 @@ function UploadPageContent() {
         saveParsedBylawsRemote(pid, result).catch((err) =>
           console.error("Firestore へのパース結果保存に失敗:", err),
         );
+        // アップロード完了 → step=2 を記録
+        syncCurrentStep(pid, 2);
       }
       router.push("/analysis");
     },
@@ -487,6 +489,7 @@ function UploadPageContent() {
       saveParsedBylawsRemote(pid, DEMO_PARSE_RESULT).catch((err) =>
         console.error("Firestore へのデモデータ保存に失敗:", err),
       );
+      syncCurrentStep(pid, 2);
     }
     router.push("/analysis");
   }, [router]);

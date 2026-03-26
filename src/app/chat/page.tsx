@@ -344,41 +344,27 @@ function ChatPageContent() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="管理規約について質問してください..."
-              disabled={isStreaming}
               rows={1}
-              className="flex-1 resize-none rounded-xl border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+              className="flex-1 resize-none rounded-xl border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               style={{ minHeight: "44px" }}
             />
-            <Button
-              onClick={() => handleSend()}
-              disabled={isStreaming || !input.trim()}
-              className="min-h-[44px] px-4 rounded-xl"
-            >
-              {isStreaming ? (
-                <svg
-                  className="animate-spin h-4 w-4"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                  />
-                </svg>
-              ) : (
-                "送信"
-              )}
-            </Button>
+            {isStreaming ? (
+              <Button
+                onClick={() => { abortRef.current?.abort(); }}
+                variant="destructive"
+                className="min-h-[44px] px-4 rounded-xl"
+              >
+                停止
+              </Button>
+            ) : (
+              <Button
+                onClick={() => handleSend()}
+                disabled={!input.trim()}
+                className="min-h-[44px] px-4 rounded-xl"
+              >
+                送信
+              </Button>
+            )}
           </div>
           <p className="text-xs text-muted-foreground mt-1.5 text-center">
             Shift+Enter で改行 / AIの回答は参考情報です

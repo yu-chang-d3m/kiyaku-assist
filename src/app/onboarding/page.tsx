@@ -21,7 +21,7 @@ import { Progress } from "@/components/ui/progress";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
 import { saveOnboarding, saveProjectId } from "@/shared/store";
-import { createProject } from "@/shared/api-client";
+import { createProject, syncCurrentStep } from "@/shared/api-client";
 import { useAuth } from "@/shared/auth/auth-context";
 import { AuthGuard } from "@/shared/auth/auth-guard";
 import { cn } from "@/lib/utils";

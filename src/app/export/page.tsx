@@ -33,6 +33,7 @@ import {
   getReviewArticles,
   getReviewProgress,
   callExport,
+  syncCurrentStep,
 } from "@/shared/api-client";
 import type { ReviewArticle } from "@/shared/db/types";
 import type { ReviewProgress } from "@/domains/review/types";
@@ -233,6 +234,8 @@ function ExportPageContent() {
           setDecisions(d);
         }
         setPhase("ready");
+        // エクスポート画面到達 → step=5 を記録
+        syncCurrentStep(pid, 5);
       } catch (err) {
         console.error("エクスポートデータの読み込みに失敗:", err);
         setPhase("no-data");
@@ -380,7 +383,7 @@ function ExportPageContent() {
             <CardTitle className="text-base">レビュー結果サマリー</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
               <div>
                 <p className="text-2xl font-bold text-green-600">
                   {counts.adopted}

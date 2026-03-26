@@ -196,7 +196,7 @@ function LoginPageContent() {
                 </div>
 
                 {/* メール/パスワード タブ */}
-                <Tabs defaultValue="login" className="w-full">
+                <Tabs defaultValue="login" className="w-full" onValueChange={() => setError("")}>
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="login" className="min-h-[44px]">
                       ログイン

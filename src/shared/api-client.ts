@@ -616,6 +616,17 @@ export async function updateProject(
   if (!res.ok) await handleResponseError(res, "プロジェクトの更新に失敗しました");
 }
 
+/**
+ * currentStep を更新する便利関数
+ *
+ * 各画面到達時にバックグラウンドで呼び出す。失敗しても画面遷移をブロックしない。
+ */
+export function syncCurrentStep(projectId: string, step: number): void {
+  updateProject(projectId, { currentStep: step }).catch((err) =>
+    console.error("currentStep の更新に失敗:", err),
+  );
+}
+
 // ========== Parsed Bylaws ==========
 
 /**

@@ -13,7 +13,7 @@ import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
 import { useAuth } from "@/shared/auth/auth-context";
 import type { StepId } from "@/shared/journey";
-import { getReviewArticles, patchReviewArticle, decideReview, callDraftSingle, startAutoGenerate, deleteReviewArticlesApi } from "@/shared/api-client";
+import { getReviewArticles, patchReviewArticle, decideReview, callDraftSingle, startAutoGenerate, deleteReviewArticlesApi, syncCurrentStep } from "@/shared/api-client";
 import type { ReviewArticle } from "@/shared/db/types";
 import type { GapAnalysisItem } from "@/domains/analysis/types";
 import { useProjectStore, loadProjectId, loadGapResults, saveReviewDecisions, loadReviewDecisions, saveReviewMemos, loadReviewMemos, loadOnboarding } from "@/shared/store";
@@ -46,6 +46,8 @@ function getAiRec(a: ReviewArticle): Decision {
 function aiRecIcon(rec: Decision): string {
   return rec === "adopted" ? "\u2713" : rec === "modified" ? "\u25B3" : "\u2212";
 }
+const AI_REC_LABEL: Record<string, string> = { adopted: "採用推奨", modified: "要確認", pending: "保留推奨" };
+const AI_REC_STYLE: Record<string, string> = { adopted: "bg-green-100 text-green-800", modified: "bg-yellow-100 text-yellow-800", pending: "bg-gray-100 text-gray-600" };
 function extractNum(s: string): number {
   const m = s.match(/(\d+)/);
   return m ? parseInt(m[1], 10) : 9999;
@@ -93,6 +95,8 @@ function ReviewPageContent() {
   const [batchDraftTotal, setBatchDraftTotal] = useState(0);
   const batchDraftControllerRef = useRef<AbortController | null>(null);
   const initDone = useRef(false);
+  const memoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [memoSaveStatus, setMemoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   // ---------- 初期化 ----------
   const gapToReview = useCallback(
@@ -140,6 +144,8 @@ function ReviewPageContent() {
         if (sm && Object.keys(sm).length > 0) { setMemos(sm); }
       }
       setPhase("ready");
+      // レビュー画面到達 → step=4 を記録
+      if (pid && pid !== "default") syncCurrentStep(pid, 4);
     } catch (err) {
       console.error("レビューデータの読み込みに失敗:", err);
       setErrorMessage(err instanceof Error ? err.message : "データの読み込みに失敗しました");
@@ -234,8 +240,24 @@ function ReviewPageContent() {
 
   function handleMemoChange(value: string) {
     if (!selectedArticle?.id) return;
+    const articleNum = selectedArticle.articleNum;
     const next = { ...memos, [selectedArticle.id]: value };
     setMemos(next); saveReviewMemos(next);
+
+    // デバウンス付き Firestore 保存（1秒後に実行）
+    if (memoDebounceRef.current) clearTimeout(memoDebounceRef.current);
+    setMemoSaveStatus("saving");
+    memoDebounceRef.current = setTimeout(async () => {
+      const pid = loadProjectId();
+      if (!pid) return;
+      try {
+        await patchReviewArticle(pid, { articleNum, memo: value });
+        setMemoSaveStatus("saved");
+        setTimeout(() => setMemoSaveStatus("idle"), 2000);
+      } catch {
+        setMemoSaveStatus("error");
+      }
+    }, 1000);
   }
   function handleDraftEdit(value: string) {
     if (!selectedArticle?.id) return;
@@ -424,39 +446,34 @@ function ReviewPageContent() {
           </CardContent>
         </Card>
 
-        {/* 一括操作バー */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        {/* フィルタバー */}
+        <div className="flex flex-wrap items-center gap-2 mb-2">
           {FILTER_OPTIONS.map((o) => (
             <Button key={o.value} variant={filter === o.value ? "default" : "outline"} size="sm" onClick={() => setFilter(o.value)}>{o.label}</Button>
           ))}
-          <span className="w-px h-6 bg-border mx-1" />
+          <span className="w-px h-6 bg-border mx-1 hidden sm:block" />
           {IMPORTANCE_FILTER_OPTIONS.map((o) => (
             <Button key={o.value} variant={importanceFilter === o.value ? "default" : "outline"} size="sm" onClick={() => setImportanceFilter(o.value)}>{o.label}</Button>
           ))}
           {categories.length > 1 && (
-            <>
-              <span className="w-px h-6 bg-border mx-1" />
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="text-sm border rounded-md px-2 py-1.5 bg-background"
-              >
-                <option value="all">全カテゴリ</option>
-                {categories.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="text-sm border rounded-md px-2 py-1.5 bg-background"
+            >
+              <option value="all">全カテゴリ</option>
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
           )}
-          <span className="w-px h-6 bg-border mx-1" />
+        </div>
+        {/* 一括操作バー（フィルタと分離） */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
           <Button size="sm" variant="outline" onClick={handleApproveAllAi}>AI推奨を全て承認</Button>
           <Button size="sm" variant="outline" onClick={handleBulkAdopt} disabled={checkedIds.size === 0}>
-            選択した項目を一括採用 ({checkedIds.size})
+            一括採用 ({checkedIds.size})
           </Button>
-          <Button size="sm" variant="destructive" onClick={handleDeleteSelected} disabled={checkedIds.size === 0}>
-            選択した項目を削除 ({checkedIds.size})
-          </Button>
-          <span className="w-px h-6 bg-border mx-1" />
           <Button
             size="sm"
             variant={undraftedCount > 0 ? "default" : "outline"}
@@ -464,15 +481,55 @@ function ReviewPageContent() {
             disabled={batchDraftPhase === "generating" || undraftedCount === 0}
           >
             {batchDraftPhase === "generating"
-              ? `ドラフト生成中 (${batchDraftProgress}/${batchDraftTotal})`
+              ? `生成中 (${batchDraftProgress}/${batchDraftTotal})`
               : undraftedCount > 0
-                ? `未生成ドラフトを一括生成 (${undraftedCount}件)`
-                : "全ドラフト生成済み"}
+                ? `一括生成 (${undraftedCount}件)`
+                : "全生成済み"}
+          </Button>
+          <span className="flex-1" />
+          <Button size="sm" variant="destructive" onClick={handleDeleteSelected} disabled={checkedIds.size === 0}>
+            削除 ({checkedIds.size})
           </Button>
         </div>
 
-        {/* テーブル */}
-        <div className="overflow-x-auto border rounded-lg mb-4">
+        {/* モバイルカードリスト */}
+        <div className="lg:hidden space-y-2 mb-4">
+          {filteredArticles.length === 0 ? (
+            <p className="p-8 text-center text-muted-foreground">該当する項目はありません。</p>
+          ) : filteredArticles.map((a) => {
+            const aid = a.id ?? "";
+            const rec = getAiRec(a);
+            const isSel = selectedId === aid;
+            return (
+              <Card key={aid} className={`cursor-pointer transition-colors ${isSel ? "ring-2 ring-primary/30" : ""}`}
+                onClick={() => { setSelectedId(isSel ? null : aid); }}>
+                <CardContent className="py-3 px-4">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <input type="checkbox" checked={checkedIds.has(aid)} onChange={() => handleToggleCheck(aid)}
+                        onClick={(e) => e.stopPropagation()} className="rounded border-gray-300 shrink-0" />
+                      <span className="font-medium text-sm">{a.articleNum}</span>
+                      <Badge className={`text-xs shrink-0 ${IMPORTANCE_STYLE[a.importance] ?? IMPORTANCE_STYLE.optional}`}>
+                        {IMPORTANCE_LABEL[a.importance] ?? "任意"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${AI_REC_STYLE[rec] ?? AI_REC_STYLE.pending}`}>
+                        {AI_REC_LABEL[rec] ?? "保留推奨"}
+                      </span>
+                      {decisionBadge(aid)}
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{a.summary}</p>
+                  {a.category && <p className="text-xs text-muted-foreground mt-1">{a.category}</p>}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* デスクトップテーブル */}
+        <div className="hidden lg:block overflow-x-auto border rounded-lg mb-4">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 border-b">
               <tr>
@@ -508,8 +565,9 @@ function ReviewPageContent() {
                       <Badge className={`text-xs ${IMPORTANCE_STYLE[a.importance] ?? IMPORTANCE_STYLE.optional}`}>{IMPORTANCE_LABEL[a.importance] ?? "任意"}</Badge>
                     </td>
                     <td className="p-2 text-center">
-                      <span className={`text-base ${rec === "adopted" ? "text-green-600" : rec === "modified" ? "text-yellow-600" : "text-gray-400"}`}
-                        title={rec === "adopted" ? "採用推奨" : rec === "modified" ? "要確認" : "保留推奨"}>{aiRecIcon(rec)}</span>
+                      <span className={`inline-block text-xs px-1.5 py-0.5 rounded-full ${AI_REC_STYLE[rec] ?? AI_REC_STYLE.pending}`}>
+                        {aiRecIcon(rec)} {AI_REC_LABEL[rec] ?? "保留推奨"}
+                      </span>
                     </td>
                     <td className="p-2 text-center">{decisionBadge(aid)}</td>
                     <td className="p-2 text-center">
@@ -565,8 +623,15 @@ function ReviewPageContent() {
                       onClick={() => handleDecision(selectedArticle, btn.value)} className="flex-1 min-h-[44px]">{btn.label}</Button>
                   ))}
                 </div>
-                <textarea placeholder="メモ（任意）" value={memos[selId] ?? ""} onChange={(e) => handleMemoChange(e.target.value)}
-                  className="w-full text-sm p-3 border rounded-lg bg-background resize-none h-16" />
+                <div className="relative">
+                  <textarea placeholder="メモ（任意）" value={memos[selId] ?? ""} onChange={(e) => handleMemoChange(e.target.value)}
+                    className="w-full text-sm p-3 border rounded-lg bg-background resize-none h-16" />
+                  {memoSaveStatus !== "idle" && (
+                    <span className={`absolute right-2 bottom-2 text-xs ${memoSaveStatus === "saving" ? "text-muted-foreground" : memoSaveStatus === "saved" ? "text-green-600" : "text-red-500"}`}>
+                      {memoSaveStatus === "saving" ? "保存中..." : memoSaveStatus === "saved" ? "保存済み" : "保存失敗"}
+                    </span>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

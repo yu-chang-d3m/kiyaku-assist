@@ -74,53 +74,105 @@ export async function searchStandardRules(
     "Vertex AI Search を呼び出し",
   );
 
-  try {
-    // Discovery Engine API を直接呼び出し
-    const endpoint = buildEndpoint(config.projectId, config.location, config.dataStoreId, config.engineId);
+  // Discovery Engine API を直接呼び出し（リトライ付き）
+  const endpoint = buildEndpoint(config.projectId, config.location, config.dataStoreId, config.engineId);
 
-    const requestBody = {
-      query,
-      pageSize: topK,
-      queryExpansionSpec: {
-        condition: "AUTO",
+  const requestBody = {
+    query,
+    pageSize: topK,
+    queryExpansionSpec: {
+      condition: "AUTO",
+    },
+    spellCorrectionSpec: {
+      mode: "AUTO",
+    },
+    contentSearchSpec: {
+      snippetSpec: {
+        returnSnippet: true,
+        maxSnippetCount: 1,
       },
-      spellCorrectionSpec: {
-        mode: "AUTO",
+      extractiveContentSpec: {
+        maxExtractiveAnswerCount: 1,
       },
-      contentSearchSpec: {
-        snippetSpec: {
-          returnSnippet: true,
-          maxSnippetCount: 1,
+    },
+  };
+
+  const maxRetries = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      // Google Auth トークンの取得（サービスアカウントまたは ADC）
+      const accessToken = await getAccessToken();
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
         },
-        extractiveContentSpec: {
-          maxExtractiveAnswerCount: 1,
-        },
-      },
-    };
+        body: JSON.stringify(requestBody),
+      });
 
-    // Google Auth トークンの取得（サービスアカウントまたは ADC）
-    const accessToken = await getAccessToken();
+      if (!response.ok) {
+        const errorText = await response.text();
+        const error = new Error(`Vertex AI Search API エラー: ${response.status} ${errorText}`);
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
+        // 5xx エラーまたは 429 はリトライ対象
+        if ((response.status >= 500 || response.status === 429) && attempt < maxRetries) {
+          const baseDelay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+          const jitter = Math.random() * 1000;
+          const delay = baseDelay + jitter;
+          logger.warn(
+            { status: response.status, attempt: attempt + 1, maxRetries, delayMs: Math.round(delay) },
+            "Vertex AI Search API エラー。リトライします",
+          );
+          await sleep(delay);
+          lastError = error;
+          continue;
+        }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Vertex AI Search API エラー: ${response.status} ${errorText}`);
+        throw error;
+      }
+
+      const data = await response.json();
+      return parseSearchResponse(data);
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+
+      // リトライ対象: ネットワークエラーまたはサーバーエラー（既に throw されたもの以外）
+      const isRetryable = err.message.includes("fetch failed") ||
+        err.message.includes("ECONNRESET") ||
+        err.message.includes("ETIMEDOUT") ||
+        err.message.includes("UND_ERR_SOCKET");
+
+      if (isRetryable && attempt < maxRetries) {
+        const baseDelay = Math.pow(2, attempt) * 1000;
+        const jitter = Math.random() * 1000;
+        const delay = baseDelay + jitter;
+        logger.warn(
+          { error: err.message, attempt: attempt + 1, maxRetries, delayMs: Math.round(delay) },
+          "Vertex AI Search 接続エラー。リトライします",
+        );
+        await sleep(delay);
+        lastError = err;
+        continue;
+      }
+
+      logger.error({ error }, "Vertex AI Search の呼び出しに失敗");
+      throw error;
     }
-
-    const data = await response.json();
-    return parseSearchResponse(data);
-  } catch (error) {
-    logger.error({ error }, "Vertex AI Search の呼び出しに失敗");
-    throw error;
   }
+
+  // ここに到達するのはリトライが全て失敗した場合のみ
+  logger.error({ lastError }, "Vertex AI Search の全リトライが失敗");
+  throw lastError ?? new Error("Vertex AI Search: 不明なエラー");
+}
+
+// ---------- ユーティリティ ----------
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ---------- 内部処理 ----------

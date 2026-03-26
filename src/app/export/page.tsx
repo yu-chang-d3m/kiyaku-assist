@@ -319,7 +319,7 @@ function ExportPageContent() {
                   />
                 </svg>
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 エクスポートデータを準備中...
               </p>
             </CardContent>
@@ -344,11 +344,11 @@ function ExportPageContent() {
               </div>
               <div>
                 <p className="font-medium mb-1">レビューが完了していません</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-base text-muted-foreground">
                   エクスポートするには、まず改正案のレビューを完了してください。
                 </p>
               </div>
-              <Button asChild className="min-h-[44px]">
+              <Button asChild>
                 <Link href="/review">レビュー画面へ</Link>
               </Button>
             </CardContent>
@@ -388,30 +388,30 @@ function ExportPageContent() {
                 <p className="text-2xl font-bold text-green-600">
                   {counts.adopted}
                 </p>
-                <p className="text-xs text-muted-foreground">採用</p>
+                <p className="text-sm text-muted-foreground">採用</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-amber-600">
                   {counts.modified}
                 </p>
-                <p className="text-xs text-muted-foreground">修正</p>
+                <p className="text-sm text-muted-foreground">修正</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-400">
                   {counts.pending}
                 </p>
-                <p className="text-xs text-muted-foreground">保留</p>
+                <p className="text-sm text-muted-foreground">保留</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-red-400">
                   {counts.undecided}
                 </p>
-                <p className="text-xs text-muted-foreground">未決定</p>
+                <p className="text-sm text-muted-foreground">未決定</p>
               </div>
             </div>
             {progress && (
               <div className="mt-4 text-center">
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   全 {articles.length} 条文中{" "}
                   {counts.adopted + counts.modified + counts.pending} 件判断済み
                 </p>
@@ -534,14 +534,14 @@ function ExportPageContent() {
                   {fmt.icon}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm">{fmt.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="font-medium text-base">{fmt.title}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
                     {fmt.description}
                   </p>
                   {feedbacks[fmt.id] && (
                     <p
                       className={cn(
-                        "text-xs mt-1 font-medium",
+                        "text-sm mt-1 font-medium",
                         feedbacks[fmt.id].includes("失敗")
                           ? "text-red-600"
                           : "text-green-600"
@@ -554,7 +554,7 @@ function ExportPageContent() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="shrink-0 min-h-[44px]"
+                  className="shrink-0"
                   disabled={exportLoading[fmt.id] ?? false}
                   onClick={() => handleExport(fmt)}
                   data-test={`export-download-${fmt.id}`}
@@ -597,15 +597,15 @@ function ExportPageContent() {
                 印
               </span>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm">印刷 / PDF 保存</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="font-medium text-base">印刷 / PDF 保存</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
                   ブラウザの印刷機能を使って PDF として保存できます。理事会への配布用に便利です。
                 </p>
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                className="shrink-0 min-h-[44px]"
+                className="shrink-0"
                 onClick={() => window.print()}
               >
                 印刷プレビュー
@@ -620,7 +620,7 @@ function ExportPageContent() {
             <p className="text-sm font-medium text-amber-800 mb-2">
               免責事項
             </p>
-            <p className="text-xs text-amber-700 leading-relaxed">
+            <p className="text-sm text-amber-700 leading-relaxed">
               本ツールが生成した改正案は、AI による参考情報であり、法的助言ではありません。
               実際の規約改正にあたっては、必ずマンション管理士や弁護士等の専門家に確認のうえ、
               総会での適切な手続きを経て決議してください。
@@ -633,10 +633,10 @@ function ExportPageContent() {
         <Card className="bg-muted/50 print:hidden">
           <CardContent className="py-6">
             <p className="font-medium mb-2">お疲れさまでした！</p>
-            <p className="text-sm text-muted-foreground mb-4">
+            <p className="text-base text-muted-foreground mb-4">
               ダウンロードした資料を使って、以下のステップで規約改正を進めてください。
             </p>
-            <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+            <ol className="text-base text-muted-foreground space-y-2 list-decimal list-inside">
               <li>
                 <strong>理事会で検討</strong> ―
                 レビュー結果を印刷して理事会メンバーに配布し、意見を集約
@@ -650,7 +650,7 @@ function ExportPageContent() {
                 新旧対照表を議案書に添付し、特別決議で可決
               </li>
             </ol>
-            <p className="text-xs text-muted-foreground mt-4">
+            <p className="text-sm text-muted-foreground mt-4">
               重要な条文については、マンション管理士や弁護士への確認をお勧めします。
             </p>
           </CardContent>

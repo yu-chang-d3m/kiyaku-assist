@@ -344,7 +344,7 @@ function AnalysisPageContent() {
                   />
                 </svg>
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 パース結果を読み込み中...
               </p>
             </CardContent>
@@ -364,12 +364,12 @@ function AnalysisPageContent() {
             <CardContent className="py-8 text-center space-y-4">
               <div className="text-4xl mb-2">📊</div>
               <h3 className="text-lg font-semibold">ギャップ分析の準備完了</h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 パース済みの条文データをAIが標準管理規約と比較し、差分を分析します。
                 分析後、自動的に改正案のドラフトも生成します。
               </p>
               <div className="flex items-center gap-3 justify-center mt-3">
-                <label className="text-xs text-muted-foreground">生成モード:</label>
+                <label className="text-sm text-muted-foreground">生成モード:</label>
                 <select
                   value={draftMode}
                   onChange={(e) => setDraftMode(e.target.value as "smart" | "precise")}
@@ -422,10 +422,10 @@ function AnalysisPageContent() {
                 <h3 className="text-lg font-semibold mb-1">
                   ギャップ分析を実行中
                 </h3>
-                <p className="text-sm text-muted-foreground">{progressMsg}</p>
+                <p className="text-base text-muted-foreground">{progressMsg}</p>
               </div>
-              <Progress value={progressPercent} className="h-2" />
-              <p className="text-xs text-muted-foreground">
+              <Progress value={progressPercent} className="h-2" aria-label="分析の進捗" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} />
+              <p className="text-sm text-muted-foreground">
                 複数条文をまとめてAIが分析します。条文数により1〜5分程度かかります。
               </p>
               <Button
@@ -475,10 +475,10 @@ function AnalysisPageContent() {
                 <h3 className="text-lg font-semibold mb-1">
                   改正案ドラフトを自動生成中
                 </h3>
-                <p className="text-sm text-muted-foreground">{draftProgressMsg}</p>
+                <p className="text-base text-muted-foreground">{draftProgressMsg}</p>
               </div>
-              <Progress value={draftProgressPercent} className="h-2" />
-              <p className="text-xs text-muted-foreground">
+              <Progress value={draftProgressPercent} className="h-2" aria-label="ドラフト生成の進捗" aria-valuenow={draftProgressPercent} aria-valuemin={0} aria-valuemax={100} />
+              <p className="text-sm text-muted-foreground">
                 分析結果に基づいてAIが改正案のドラフトを生成しています。
                 <br />
                 条文数により3〜10分程度かかります。
@@ -518,7 +518,7 @@ function AnalysisPageContent() {
               <h3 className="text-lg font-semibold text-destructive">
                 分析中にエラーが発生しました
               </h3>
-              <p className="text-sm text-muted-foreground">{errorMsg}</p>
+              <p className="text-base text-muted-foreground">{errorMsg}</p>
               <div className="flex flex-col gap-3 mt-4">
                 <Button
                   onClick={async () => {
@@ -603,7 +603,7 @@ function AnalysisPageContent() {
               <p className="text-2xl font-bold text-red-600">
                 {counts.missing}
               </p>
-              <p className="text-xs text-muted-foreground">未対応</p>
+              <p className="text-sm text-muted-foreground">未対応</p>
             </CardContent>
           </Card>
           <Card
@@ -619,7 +619,7 @@ function AnalysisPageContent() {
               <p className="text-2xl font-bold text-amber-600">
                 {counts.outdated + counts.partial}
               </p>
-              <p className="text-xs text-muted-foreground">要修正</p>
+              <p className="text-sm text-muted-foreground">要修正</p>
             </CardContent>
           </Card>
           <Card
@@ -637,7 +637,7 @@ function AnalysisPageContent() {
               <p className="text-2xl font-bold text-green-600">
                 {counts.compliant}
               </p>
-              <p className="text-xs text-muted-foreground">対応済み</p>
+              <p className="text-sm text-muted-foreground">対応済み</p>
             </CardContent>
           </Card>
           <Card
@@ -651,7 +651,7 @@ function AnalysisPageContent() {
               <p className="text-2xl font-bold text-primary">
                 {counts.mandatory}
               </p>
-              <p className="text-xs text-muted-foreground">法的必須</p>
+              <p className="text-sm text-muted-foreground">法的必須</p>
             </CardContent>
           </Card>
         </div>
@@ -691,14 +691,14 @@ function AnalysisPageContent() {
                       <Badge className={IMPORTANCE_STYLES[item.importance]}>
                         {IMPORTANCE_LABELS[item.importance]}
                       </Badge>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-sm text-muted-foreground">
                         {item.category}
                       </span>
                     </div>
-                    <p className="font-medium text-sm">
+                    <p className="font-medium text-base">
                       {item.articleNum}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                       {item.gapSummary}
                     </p>
                   </div>
@@ -708,7 +708,7 @@ function AnalysisPageContent() {
           ))}
 
           {filteredResults.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground text-sm">
+            <div className="text-center py-8 text-muted-foreground text-base">
               該当する条文はありません
             </div>
           )}
@@ -723,7 +723,7 @@ function AnalysisPageContent() {
                 {counts.missing + counts.outdated + counts.partial}
                 件の改正が必要です
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 AIが改正案のドラフトを生成済みです。レビュー画面で確認・判断できます。
               </p>
             </div>

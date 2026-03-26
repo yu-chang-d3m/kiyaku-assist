@@ -100,7 +100,7 @@ export function ArticleDiffView({
       <TabsContent value="current" className="mt-3">
         {hasOriginal ? (
           <div className="p-4 rounded-lg bg-red-50 border border-red-100">
-            <p className="text-xs font-medium text-red-700 mb-2">現行（変更前）</p>
+            <p className="text-sm font-medium text-red-700 mb-2">現行（変更前）</p>
             <p className="text-base text-red-900 leading-relaxed whitespace-pre-line">
               {original}
             </p>
@@ -118,9 +118,9 @@ export function ArticleDiffView({
       <TabsContent value="draft" className="mt-3">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">AI ドラフト</p>
+            <p className="text-base font-medium">AI ドラフト</p>
             {isDraftEdited && (
-              <Button variant="outline" size="sm" onClick={onDraftSave} className="text-xs">
+              <Button variant="outline" size="sm" onClick={onDraftSave}>
                 編集を保存
               </Button>
             )}
@@ -129,7 +129,8 @@ export function ArticleDiffView({
             <textarea
               value={draft}
               onChange={(e) => onDraftEdit(e.target.value)}
-              className="w-full text-base leading-relaxed p-4 border rounded-lg bg-blue-50 border-blue-100 text-blue-900 resize-none min-h-[160px] focus:outline-none focus:ring-2 focus:ring-ring"
+              aria-label="改定案テキストの編集"
+              className="w-full text-base leading-relaxed p-4 border rounded-lg bg-blue-50 border-blue-100 text-blue-900 resize-none min-h-[160px] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring"
             />
           ) : (
             <div className="p-4 rounded-lg bg-gray-50 border border-gray-200">
@@ -157,10 +158,10 @@ export function ArticleDiffView({
             )}
           </Button>
           {draftError && (
-            <p className="text-xs text-red-600 mt-1">{draftError}</p>
+            <p className="text-sm text-red-600 mt-1">{draftError}</p>
           )}
           {baseRef && (
-            <p className="text-xs text-muted-foreground mt-1">出典: {baseRef}</p>
+            <p className="text-sm text-muted-foreground mt-1">出典: {baseRef}</p>
           )}
         </div>
       </TabsContent>

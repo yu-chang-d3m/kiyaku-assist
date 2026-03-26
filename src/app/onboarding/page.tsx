@@ -200,17 +200,23 @@ function OnboardingPageContent() {
           <CardHeader>
             {/* プログレスバー */}
             <div className="mb-4">
-              <Progress value={progressPercent} className="h-2" />
+              <Progress
+                value={progressPercent}
+                className="h-2"
+                aria-valuenow={Math.round(progressPercent)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              />
             </div>
 
             <div className="flex items-center justify-between mb-2">
               <Badge variant="secondary">
                 {currentQ + 1} / {totalQ}
               </Badge>
-              <span className="text-xs text-muted-foreground">約5分で完了</span>
+              <span className="text-sm text-muted-foreground">約5分で完了</span>
             </div>
             <CardTitle className="text-xl">{question.question}</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-base text-muted-foreground mt-1">
               {question.description}
             </p>
           </CardHeader>
@@ -224,7 +230,7 @@ function OnboardingPageContent() {
                 onChange={(e) => handleTextChange(e.target.value)}
                 placeholder={question.placeholder}
                 data-test={`onboarding-input-${question.id}`}
-                className="w-full px-4 py-3 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full px-4 py-3 rounded-lg border text-base focus:outline-none focus:ring-2 focus:ring-primary/50"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && canProceed) handleNext();
                 }}
@@ -238,7 +244,7 @@ function OnboardingPageContent() {
                 onClick={() => handleSelect(option.value)}
                 data-test={`onboarding-option-${option.value}`}
                 className={cn(
-                  "w-full text-left px-4 py-3 rounded-lg border text-sm transition-colors",
+                  "w-full text-left px-4 py-3 rounded-lg border text-base transition-colors",
                   selectedValue === option.value
                     ? "border-primary bg-primary/5 font-medium"
                     : "border-border hover:border-primary/50 hover:bg-muted/50",
@@ -251,10 +257,10 @@ function OnboardingPageContent() {
             {/* 規約が手元にない場合のヘルプ */}
             {question.id === "hasCurrentRules" && selectedValue === "no" && (
               <div className="mt-4 p-3 bg-muted rounded-lg">
-                <p className="text-sm font-medium mb-1">
+                <p className="text-base font-medium mb-1">
                   管理会社に依頼して取得できます
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   「現行の管理規約一式をPDFで送ってください」と管理会社にメールで依頼してください。通常1〜2営業日で届きます。取得後にこのツールに戻ってアップロードできます。
                 </p>
               </div>
@@ -263,7 +269,7 @@ function OnboardingPageContent() {
             {/* エラー表示 */}
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-700">{error}</p>
+                <p className="text-base text-red-700">{error}</p>
               </div>
             )}
 

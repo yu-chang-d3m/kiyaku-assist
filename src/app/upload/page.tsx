@@ -528,7 +528,7 @@ function UploadPageContent() {
         {/* 注意喚起 */}
         <div className="p-3 bg-muted rounded-lg mb-6 text-sm">
           <p className="font-medium">アップロード対象</p>
-          <p className="text-muted-foreground text-xs mt-1">
+          <p className="text-muted-foreground text-sm mt-1">
             管理規約・使用細則のみをアップロードしてください。組合員名簿・議事録等の個人情報を含む文書は対象外です。
           </p>
         </div>
@@ -560,10 +560,10 @@ function UploadPageContent() {
                   <p className="font-medium mb-1">
                     ファイルをドラッグ&ドロップ
                   </p>
-                  <p className="text-sm text-muted-foreground mb-4">
+                  <p className="text-base text-muted-foreground mb-4">
                     またはクリックしてファイルを選択
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     対応形式: PDF (.pdf) / Word (.docx) / テキスト (.txt)
                   </p>
                   <input
@@ -578,7 +578,7 @@ function UploadPageContent() {
 
                 {/* テキスト直接入力の代替手段 */}
                 <div className="mt-6 text-center space-y-2">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     スキャンした紙の規約しかない場合は、
                     <button
                       className="text-primary underline ml-1"
@@ -587,7 +587,7 @@ function UploadPageContent() {
                       テキストを直接貼り付け
                     </button>
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     Google Docs の場合: メニューの「ファイル」→「ダウンロード」→「Microsoft Word (.docx)」でダウンロードしてからアップロードしてください
                   </p>
                 </div>
@@ -597,7 +597,7 @@ function UploadPageContent() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">テキストを直接入力</CardTitle>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-base text-muted-foreground">
                     管理規約の全文をコピー&ペーストしてください。
                   </p>
                 </CardHeader>
@@ -606,7 +606,8 @@ function UploadPageContent() {
                     value={directText}
                     onChange={(e) => setDirectText(e.target.value)}
                     placeholder={"第1章　総則\n（目的）\n第1条　この規約は..."}
-                    className="w-full h-64 p-3 border rounded-lg text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    aria-label="管理規約のテキストを入力"
+                    className="w-full h-64 p-3 border rounded-lg text-base font-mono resize-y focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
                   <div className="flex gap-3 mt-4">
                     <Button
@@ -667,12 +668,12 @@ function UploadPageContent() {
                 <p className="text-sm text-muted-foreground">
                   {file.name}（{((file.size ?? 0) / 1024).toFixed(0)} KB）
                   {getFileTypeLabel(file) && (
-                    <span className="ml-1 text-xs">— {getFileTypeLabel(file)}形式</span>
+                    <span className="ml-1 text-sm">— {getFileTypeLabel(file)}形式</span>
                   )}
                 </p>
               )}
               {state === "parsing" && (
-                <p className="text-xs text-muted-foreground mt-4">
+                <p className="text-sm text-muted-foreground mt-4">
                   条文の構造を認識し、章・条・項に分類しています。少々お待ちください...
                 </p>
               )}
@@ -712,7 +713,7 @@ function UploadPageContent() {
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle className="text-lg">解析結果の確認</CardTitle>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-base text-muted-foreground">
                   AIが認識した規約の構造です。正しく読み取れているか確認してください。
                 </p>
               </CardHeader>
@@ -726,7 +727,7 @@ function UploadPageContent() {
                       <span className="font-medium">
                         第{ch.chapter}章 {ch.title}
                       </span>
-                      <span className="text-muted-foreground text-xs">
+                      <span className="text-muted-foreground text-sm">
                         {ch.articleCount}条
                       </span>
                     </div>
@@ -739,7 +740,7 @@ function UploadPageContent() {
                     <p className="text-sm text-amber-800 font-medium mb-1">
                       注意事項
                     </p>
-                    <ul className="text-xs text-amber-700 list-disc list-inside">
+                    <ul className="text-sm text-amber-700 list-disc list-inside">
                       {parseResult.metadata.warnings.map((w: string, i: number) => (
                         <li key={i}>{w}</li>
                       ))}

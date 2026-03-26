@@ -132,7 +132,7 @@ function LoginPageContent() {
             <CardTitle className="text-2xl font-bold tracking-tight">
               キヤクアシスト
             </CardTitle>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               マンション管理規約改正AIアシスタント
             </p>
           </CardHeader>
@@ -298,8 +298,9 @@ function LoginPageContent() {
 
                 {/* エラー表示 */}
                 {error && (
-                  <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
-                    <p className="text-sm text-destructive">{error}</p>
+                  <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
+                    <AlertTriangle className="size-5 text-red-600 shrink-0 mt-0.5" />
+                    <p className="text-base text-red-700 dark:text-red-300">{error}</p>
                   </div>
                 )}
               </div>

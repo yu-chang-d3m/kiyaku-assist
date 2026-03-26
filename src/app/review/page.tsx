@@ -378,7 +378,7 @@ function ReviewPageContent() {
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 animate-pulse">
                 <Spinner className="w-6 h-6 text-primary" />
               </div>
-              <p className="text-sm text-muted-foreground">レビューデータを準備中...</p>
+              <p className="text-base text-muted-foreground">レビューデータを準備中...</p>
             </CardContent>
           </Card>
         </main>
@@ -393,7 +393,7 @@ function ReviewPageContent() {
         <main className="flex-1 flex items-center justify-center px-4 py-8">
           <Card className="max-w-md w-full">
             <CardContent className="py-8 text-center space-y-4">
-              <p className="text-sm text-red-600">{errorMessage}</p>
+              <p className="text-base text-red-600">{errorMessage}</p>
               <Button asChild><Link href="/analysis">分析画面に戻る</Link></Button>
             </CardContent>
           </Card>
@@ -412,9 +412,9 @@ function ReviewPageContent() {
 
   function decisionBadge(aid: string) {
     const d = decisions[aid];
-    if (d === "adopted") return <Badge className="bg-green-500 text-white text-xs">採用</Badge>;
-    if (d === "modified") return <Badge className="bg-yellow-500 text-white text-xs">修正</Badge>;
-    if (d === "pending") return <Badge className="bg-gray-400 text-white text-xs">保留</Badge>;
+    if (d === "adopted") return <Badge className="bg-green-500 text-white text-sm">採用</Badge>;
+    if (d === "modified") return <Badge className="bg-yellow-500 text-white text-sm">修正</Badge>;
+    if (d === "pending") return <Badge className="bg-gray-400 text-white text-sm">保留</Badge>;
     return null;
   }
 
@@ -442,18 +442,18 @@ function ReviewPageContent() {
               )}
               <span className="ml-auto">完了: <strong>{decided}</strong> / {articles.length}</span>
             </div>
-            <Progress value={pct} className="h-2" />
+            <Progress value={pct} className="h-2" aria-label="レビュー進捗" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} />
           </CardContent>
         </Card>
 
         {/* フィルタバー */}
         <div className="flex flex-wrap items-center gap-2 mb-2">
           {FILTER_OPTIONS.map((o) => (
-            <Button key={o.value} variant={filter === o.value ? "default" : "outline"} size="sm" onClick={() => setFilter(o.value)}>{o.label}</Button>
+            <Button key={o.value} variant={filter === o.value ? "default" : "outline"} size="sm" aria-pressed={filter === o.value} onClick={() => setFilter(o.value)}>{o.label}</Button>
           ))}
           <span className="w-px h-6 bg-border mx-1 hidden sm:block" />
           {IMPORTANCE_FILTER_OPTIONS.map((o) => (
-            <Button key={o.value} variant={importanceFilter === o.value ? "default" : "outline"} size="sm" onClick={() => setImportanceFilter(o.value)}>{o.label}</Button>
+            <Button key={o.value} variant={importanceFilter === o.value ? "default" : "outline"} size="sm" aria-pressed={importanceFilter === o.value} onClick={() => setImportanceFilter(o.value)}>{o.label}</Button>
           ))}
           {categories.length > 1 && (
             <select
@@ -509,19 +509,19 @@ function ReviewPageContent() {
                       <input type="checkbox" checked={checkedIds.has(aid)} onChange={() => handleToggleCheck(aid)}
                         onClick={(e) => e.stopPropagation()} className="rounded border-gray-300 shrink-0" />
                       <span className="font-medium text-sm">{a.articleNum}</span>
-                      <Badge className={`text-xs shrink-0 ${IMPORTANCE_STYLE[a.importance] ?? IMPORTANCE_STYLE.optional}`}>
+                      <Badge className={`text-sm shrink-0 ${IMPORTANCE_STYLE[a.importance] ?? IMPORTANCE_STYLE.optional}`}>
                         {IMPORTANCE_LABEL[a.importance] ?? "任意"}
                       </Badge>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${AI_REC_STYLE[rec] ?? AI_REC_STYLE.pending}`}>
+                      <span className={`text-sm px-1.5 py-0.5 rounded-full ${AI_REC_STYLE[rec] ?? AI_REC_STYLE.pending}`}>
                         {AI_REC_LABEL[rec] ?? "保留推奨"}
                       </span>
                       {decisionBadge(aid)}
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground line-clamp-2">{a.summary}</p>
-                  {a.category && <p className="text-xs text-muted-foreground mt-1">{a.category}</p>}
+                  {a.category && <p className="text-sm text-muted-foreground mt-1">{a.category}</p>}
                 </CardContent>
               </Card>
             );
@@ -533,16 +533,16 @@ function ReviewPageContent() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 border-b">
               <tr>
-                <th className="p-2 w-8">
-                  <input type="checkbox" checked={filteredArticles.length > 0 && checkedIds.size === filteredArticles.length} onChange={handleToggleAll} className="rounded border-gray-300" />
+                <th scope="col" className="p-2 w-8">
+                  <input type="checkbox" checked={filteredArticles.length > 0 && checkedIds.size === filteredArticles.length} onChange={handleToggleAll} className="rounded border-gray-300" aria-label="全て選択" />
                 </th>
-                <th className="p-2 text-left whitespace-nowrap">条番号</th>
-                <th className="p-2 text-left whitespace-nowrap">カテゴリ</th>
-                <th className="p-2 text-left">要約</th>
-                <th className="p-2 text-center whitespace-nowrap">重要度</th>
-                <th className="p-2 text-center whitespace-nowrap">AI推奨</th>
-                <th className="p-2 text-center whitespace-nowrap">判断</th>
-                <th className="p-2 text-center whitespace-nowrap">ドラフト</th>
+                <th scope="col" className="p-2 text-left whitespace-nowrap">条番号</th>
+                <th scope="col" className="p-2 text-left whitespace-nowrap">カテゴリ</th>
+                <th scope="col" className="p-2 text-left">要約</th>
+                <th scope="col" className="p-2 text-center whitespace-nowrap">重要度</th>
+                <th scope="col" className="p-2 text-center whitespace-nowrap">AI推奨</th>
+                <th scope="col" className="p-2 text-center whitespace-nowrap">判断</th>
+                <th scope="col" className="p-2 text-center whitespace-nowrap">ドラフト</th>
               </tr>
             </thead>
             <tbody>
@@ -562,10 +562,10 @@ function ReviewPageContent() {
                     <td className="p-2 whitespace-nowrap text-muted-foreground">{a.category}</td>
                     <td className="p-2 max-w-xs truncate">{a.summary}</td>
                     <td className="p-2 text-center">
-                      <Badge className={`text-xs ${IMPORTANCE_STYLE[a.importance] ?? IMPORTANCE_STYLE.optional}`}>{IMPORTANCE_LABEL[a.importance] ?? "任意"}</Badge>
+                      <Badge className={`text-sm ${IMPORTANCE_STYLE[a.importance] ?? IMPORTANCE_STYLE.optional}`}>{IMPORTANCE_LABEL[a.importance] ?? "任意"}</Badge>
                     </td>
                     <td className="p-2 text-center">
-                      <span className={`inline-block text-xs px-1.5 py-0.5 rounded-full ${AI_REC_STYLE[rec] ?? AI_REC_STYLE.pending}`}>
+                      <span className={`inline-block text-sm px-1.5 py-0.5 rounded-full ${AI_REC_STYLE[rec] ?? AI_REC_STYLE.pending}`}>
                         {aiRecIcon(rec)} {AI_REC_LABEL[rec] ?? "保留推奨"}
                       </span>
                     </td>
@@ -621,34 +621,34 @@ function ReviewPageContent() {
                   <p className="text-sm font-semibold">判断支援情報</p>
                   {selectedArticle.impactOnResidents && (
                     <div>
-                      <p className="text-xs font-medium text-blue-700 mb-0.5">住民生活への影響</p>
+                      <p className="text-sm font-medium text-blue-700 mb-0.5">住民生活への影響</p>
                       <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.impactOnResidents}</p>
                     </div>
                   )}
                   {selectedArticle.riskIfUnchanged && (
                     <div>
-                      <p className="text-xs font-medium text-red-700 mb-0.5">変更しなかった場合のリスク</p>
+                      <p className="text-sm font-medium text-red-700 mb-0.5">変更しなかった場合のリスク</p>
                       <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.riskIfUnchanged}</p>
                     </div>
                   )}
                   {selectedArticle.transitionalMeasure && (
                     <div>
-                      <p className="text-xs font-medium text-amber-700 mb-0.5">経過措置</p>
+                      <p className="text-sm font-medium text-amber-700 mb-0.5">経過措置</p>
                       <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.transitionalMeasure}</p>
                     </div>
                   )}
                   {selectedArticle.standardRuleComparison && (
                     <div>
-                      <p className="text-xs font-medium text-green-700 mb-0.5">標準管理規約との対比</p>
+                      <p className="text-sm font-medium text-green-700 mb-0.5">標準管理規約との対比</p>
                       <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.standardRuleComparison}</p>
                     </div>
                   )}
                   {selectedArticle.relatedLawRefs && selectedArticle.relatedLawRefs.length > 0 && (
                     <div>
-                      <p className="text-xs font-medium text-purple-700 mb-0.5">根拠法令</p>
+                      <p className="text-sm font-medium text-purple-700 mb-0.5">根拠法令</p>
                       <div className="flex flex-wrap gap-1">
                         {selectedArticle.relatedLawRefs.map((ref, i) => (
-                          <Badge key={i} variant="outline" className="text-xs">{ref}</Badge>
+                          <Badge key={i} variant="outline" className="text-sm">{ref}</Badge>
                         ))}
                       </div>
                     </div>
@@ -660,14 +660,14 @@ function ReviewPageContent() {
                 <div className="flex gap-3">
                   {([{ value: "adopted" as Decision, label: "採用" }, { value: "modified" as Decision, label: "修正" }, { value: "pending" as Decision, label: "保留" }]).map((btn) => (
                     <Button key={btn.value} variant={decisions[selId] === btn.value ? "default" : "outline"}
-                      onClick={() => handleDecision(selectedArticle, btn.value)} className="flex-1 min-h-[44px]">{btn.label}</Button>
+                      onClick={() => handleDecision(selectedArticle, btn.value)} className="flex-1">{btn.label}</Button>
                   ))}
                 </div>
                 <div className="relative">
-                  <textarea placeholder="メモ（任意）" value={memos[selId] ?? ""} onChange={(e) => handleMemoChange(e.target.value)}
-                    className="w-full text-sm p-3 border rounded-lg bg-background resize-none h-16" />
+                  <textarea placeholder="メモ（任意）" aria-label="レビューメモを入力" value={memos[selId] ?? ""} onChange={(e) => handleMemoChange(e.target.value)}
+                    className="w-full text-base p-3 border rounded-lg bg-background resize-none h-16" />
                   {memoSaveStatus !== "idle" && (
-                    <span className={`absolute right-2 bottom-2 text-xs ${memoSaveStatus === "saving" ? "text-muted-foreground" : memoSaveStatus === "saved" ? "text-green-600" : "text-red-500"}`}>
+                    <span className={`absolute right-2 bottom-2 text-sm ${memoSaveStatus === "saving" ? "text-muted-foreground" : memoSaveStatus === "saved" ? "text-green-600" : "text-red-500"}`}>
                       {memoSaveStatus === "saving" ? "保存中..." : memoSaveStatus === "saved" ? "保存済み" : "保存失敗"}
                     </span>
                   )}
@@ -689,7 +689,7 @@ function ReviewPageContent() {
                     <p className="font-medium">
                       {decided} / {articles.length} 件の判断が完了（残り {articles.length - decided} 件）
                     </p>
-                    <p className="text-sm text-muted-foreground mt-1">
+                    <p className="text-base text-muted-foreground mt-1">
                       未決定の項目がある場合でもエクスポートできます。
                       「AI推奨を全て承認」で残りを一括設定することもできます。
                     </p>
@@ -698,11 +698,11 @@ function ReviewPageContent() {
               </div>
               <div className="flex gap-2 flex-shrink-0">
                 {!allDone && (
-                  <Button variant="outline" size="lg" className="min-h-[44px]" onClick={handleApproveAllAi} data-test="review-approve-all">
+                  <Button variant="outline" size="lg" onClick={handleApproveAllAi} data-test="review-approve-all">
                     AI推奨を全て承認
                   </Button>
                 )}
-                <Button asChild size="lg" className="min-h-[44px]" data-test="review-next">
+                <Button asChild size="lg" data-test="review-next">
                   <Link href="/export">エクスポートへ</Link>
                 </Button>
               </div>

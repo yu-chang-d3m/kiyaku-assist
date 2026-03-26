@@ -243,7 +243,7 @@ function ChatPageContent() {
             >
               <div
                 className={cn(
-                  "max-w-[80%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed",
+                  "max-w-[80%] rounded-2xl px-4 py-3 text-base whitespace-pre-wrap leading-relaxed",
                   msg.role === "user"
                     ? "bg-primary text-primary-foreground"
                     : msg.filtered
@@ -267,7 +267,7 @@ function ChatPageContent() {
                         d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
                       />
                     </svg>
-                    <span className="text-xs font-medium">
+                    <span className="text-sm font-medium">
                       ガードレール適用
                     </span>
                   </div>
@@ -290,7 +290,7 @@ function ChatPageContent() {
             messages[messages.length - 1]?.role === "assistant" &&
             messages[messages.length - 1]?.content === "" && (
               <div className="flex justify-start">
-                <div className="bg-muted rounded-2xl px-4 py-3 text-sm text-muted-foreground">
+                <div className="bg-muted rounded-2xl px-4 py-3 text-base text-muted-foreground">
                   <span className="inline-flex gap-1">
                     <span
                       className="animate-bounce"
@@ -323,7 +323,6 @@ function ChatPageContent() {
                 variant="outline"
                 size="sm"
                 onClick={handleRetry}
-                className="min-h-[44px]"
               >
                 再試行
               </Button>
@@ -344,15 +343,17 @@ function ChatPageContent() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="管理規約について質問してください..."
+              aria-label="質問を入力"
               rows={1}
-              className="flex-1 resize-none rounded-xl border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="flex-1 resize-none rounded-xl border bg-background px-4 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-ring"
               style={{ minHeight: "44px" }}
             />
             {isStreaming ? (
               <Button
                 onClick={() => { abortRef.current?.abort(); }}
                 variant="destructive"
-                className="min-h-[44px] px-4 rounded-xl"
+                aria-label="AI応答を停止"
+                className="px-4 rounded-xl"
               >
                 停止
               </Button>
@@ -360,13 +361,14 @@ function ChatPageContent() {
               <Button
                 onClick={() => handleSend()}
                 disabled={!input.trim()}
-                className="min-h-[44px] px-4 rounded-xl"
+                aria-label="質問を送信"
+                className="px-4 rounded-xl"
               >
                 送信
               </Button>
             )}
           </div>
-          <p className="text-xs text-muted-foreground mt-1.5 text-center">
+          <p className="text-sm text-muted-foreground mt-1.5 text-center">
             Shift+Enter で改行 / AIの回答は参考情報です
           </p>
         </div>

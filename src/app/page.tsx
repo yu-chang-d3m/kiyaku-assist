@@ -27,10 +27,10 @@ export default function Home() {
         {/* 改正法対応バナー */}
         <div className="bg-primary/5 border-b">
           <div className="max-w-5xl mx-auto px-4 py-2 flex items-center justify-center gap-2">
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="secondary">
               対応済み
             </Badge>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               改正区分所有法（2026年4月施行）に対応
             </p>
           </div>
@@ -74,10 +74,10 @@ export default function Home() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-base text-muted-foreground">
                       {step.description}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="text-sm text-muted-foreground mt-2">
                       目安: {step.estimatedMinutes}分
                     </p>
                   </CardContent>
@@ -92,19 +92,19 @@ export default function Home() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="text-center">
               <p className="text-3xl font-bold text-primary mb-2">1/100</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 専門家費用（46〜58万円）の約1/100のコスト
               </p>
             </div>
             <div className="text-center">
               <p className="text-3xl font-bold text-primary mb-2">2〜3時間</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 ご自分のペースで進められる所要時間
               </p>
             </div>
             <div className="text-center">
               <p className="text-3xl font-bold text-primary mb-2">令和7年対応</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 最新の標準管理規約（2025年10月改正）に完全準拠
               </p>
             </div>

@@ -56,6 +56,8 @@ function SettingsMenu() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuItemsRef = useRef<(HTMLButtonElement | null)[]>([]);
 
   // 外側クリックで閉じる
   useEffect(() => {
@@ -68,6 +70,47 @@ function SettingsMenu() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
+
+  // Escape キーで閉じる
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
+
+  // メニュー開閉時のフォーカス管理
+  useEffect(() => {
+    if (open) {
+      // メニューが開いたら最初の項目にフォーカス
+      requestAnimationFrame(() => {
+        menuItemsRef.current[0]?.focus();
+      });
+    }
+  }, [open]);
+
+  // メニュー内キーボードナビゲーション
+  const handleMenuKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const items = menuItemsRef.current.filter(Boolean) as HTMLButtonElement[];
+    const currentIndex = items.indexOf(e.target as HTMLButtonElement);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const next = (currentIndex + 1) % items.length;
+      items[next]?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const prev = (currentIndex - 1 + items.length) % items.length;
+      items[prev]?.focus();
+    } else if (e.key === "Tab") {
+      // Tab でメニュー外に出たら閉じる
+      setOpen(false);
+    }
+  }, []);
 
   const [confirmTarget, setConfirmTarget] = useState<"cache" | "all" | null>(null);
 
@@ -101,20 +144,30 @@ function SettingsMenu() {
   return (
     <div className="relative" ref={menuRef}>
       <Button
+        ref={triggerRef}
         variant="ghost"
         size="icon"
         onClick={() => { setOpen((prev) => !prev); setMessage(""); }}
-        className="size-8 text-muted-foreground hover:text-foreground"
+        className="min-h-[44px] min-w-[44px] text-muted-foreground hover:text-foreground"
         aria-label="設定"
+        aria-expanded={open}
+        aria-haspopup="menu"
       >
         <Settings className="size-4" />
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-64 bg-background border rounded-lg shadow-lg p-2 z-50">
-          <p className="text-xs font-medium text-muted-foreground px-2 py-1 mb-1">データ管理</p>
+        <div
+          role="menu"
+          aria-label="データ管理"
+          onKeyDown={handleMenuKeyDown}
+          className="absolute right-0 top-full mt-2 w-64 bg-background border rounded-lg shadow-lg p-2 z-50"
+        >
+          <p className="text-sm font-medium text-muted-foreground px-2 py-1 mb-1">データ管理</p>
 
           <button
+            ref={(el) => { menuItemsRef.current[0] = el; }}
+            role="menuitem"
             onClick={() => setConfirmTarget("cache")}
             disabled={busy}
             className="flex items-center gap-2 w-full px-2 py-2 text-sm rounded-md hover:bg-muted transition-colors text-left disabled:opacity-50"
@@ -122,11 +175,13 @@ function SettingsMenu() {
             <Database className="size-4 text-muted-foreground shrink-0" />
             <div>
               <p className="font-medium">AI キャッシュを削除</p>
-              <p className="text-xs text-muted-foreground">分析・ドラフトのキャッシュをクリア</p>
+              <p className="text-sm text-muted-foreground">分析・ドラフトのキャッシュをクリア</p>
             </div>
           </button>
 
           <button
+            ref={(el) => { menuItemsRef.current[1] = el; }}
+            role="menuitem"
             onClick={() => setConfirmTarget("all")}
             disabled={busy}
             className="flex items-center gap-2 w-full px-2 py-2 text-sm rounded-md hover:bg-destructive/10 transition-colors text-left disabled:opacity-50"
@@ -134,12 +189,12 @@ function SettingsMenu() {
             <Trash2 className="size-4 text-destructive shrink-0" />
             <div>
               <p className="font-medium text-destructive">全データを削除</p>
-              <p className="text-xs text-muted-foreground">プロジェクト + キャッシュを全削除</p>
+              <p className="text-sm text-muted-foreground">プロジェクト + キャッシュを全削除</p>
             </div>
           </button>
 
           {message && (
-            <p className="text-xs px-2 py-1.5 mt-1 text-muted-foreground bg-muted rounded">
+            <p className="text-sm px-2 py-1.5 mt-1 text-muted-foreground bg-muted rounded">
               {message}
             </p>
           )}
@@ -198,12 +253,12 @@ export function AppHeader({ currentStep, showProgress = true }: AppHeaderProps) 
           </h1>
         </Link>
         <div className="flex items-center gap-3">
-          <p className="text-xs text-muted-foreground hidden sm:block">
+          <p className="text-sm text-muted-foreground hidden sm:block">
             マンション管理規約改正AIアシスタント
           </p>
           <Link
             href="/chat"
-            className="text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+            className="text-sm px-3 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
           >
             AIに質問
           </Link>
@@ -219,7 +274,7 @@ export function AppHeader({ currentStep, showProgress = true }: AppHeaderProps) 
                 variant="ghost"
                 size="sm"
                 onClick={handleSignOut}
-                className="min-h-[44px] text-xs text-muted-foreground hover:text-foreground"
+                className="min-h-[44px] text-sm text-muted-foreground hover:text-foreground"
               >
                 <LogOut className="size-4" />
                 <span className="hidden sm:inline">ログアウト</span>
@@ -231,7 +286,7 @@ export function AppHeader({ currentStep, showProgress = true }: AppHeaderProps) 
               variant="ghost"
               size="sm"
               asChild
-              className="min-h-[44px] text-xs"
+              className="min-h-[44px] text-sm"
             >
               <Link href="/login">
                 <LogIn className="size-4" />

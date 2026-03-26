@@ -65,7 +65,7 @@ export function ProjectList() {
   if (loading) {
     return (
       <div className="text-center py-4">
-        <p className="text-sm text-muted-foreground">プロジェクトを読み込み中...</p>
+        <p className="text-base text-muted-foreground">プロジェクトを読み込み中...</p>
       </div>
     );
   }
@@ -94,7 +94,7 @@ export function ProjectList() {
               <CardContent className="flex items-center justify-between gap-4 py-4">
                 <div className="min-w-0">
                   <p className="font-medium truncate">{project.condoName}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     進捗: {label}（{step + 1} / {JOURNEY_STEPS.length}）
                   </p>
                 </div>
@@ -112,9 +112,10 @@ export function ProjectList() {
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={() => handleDelete(project)}
                     disabled={deleting === pid}
+                    aria-label={`${project.condoName} を削除`}
                   >
                     {deleting === pid ? (
-                      <span className="text-xs">削除中...</span>
+                      <span className="text-sm">削除中...</span>
                     ) : (
                       <Trash2 className="size-4" />
                     )}

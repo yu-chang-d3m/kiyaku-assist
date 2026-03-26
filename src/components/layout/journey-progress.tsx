@@ -23,7 +23,7 @@ export function JourneyProgress({ currentStep }: JourneyProgressProps) {
     <nav aria-label="規約改正の進捗" className="w-full bg-card border-b">
       <div className="max-w-5xl mx-auto px-4 py-3">
         {/* モバイル: 現在ステップ名 + N/M 表示 */}
-        <p className="md:hidden text-xs text-center text-muted-foreground mb-2">
+        <p className="md:hidden text-sm text-center text-muted-foreground mb-2">
           <span className="font-semibold text-foreground">{currentLabel}</span>
           {" "}({currentIndex + 1} / {JOURNEY_STEPS.length})
         </p>
@@ -33,11 +33,11 @@ export function JourneyProgress({ currentStep }: JourneyProgressProps) {
             const isCurrent = step.id === currentStep;
 
             return (
-              <li key={step.id} className="flex items-center gap-1 sm:gap-2 flex-1">
+              <li key={step.id} className="flex items-center gap-1 sm:gap-2 flex-1" {...(isCurrent ? { "aria-current": "step" as const } : {})}>
                 {/* ステップ番号 */}
                 <div
                   className={cn(
-                    "flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm font-medium shrink-0 transition-colors",
+                    "flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium shrink-0 transition-colors",
                     isCompleted && "bg-primary text-primary-foreground",
                     isCurrent && "bg-primary text-primary-foreground ring-2 ring-primary/30",
                     !isCompleted && !isCurrent && "bg-muted text-muted-foreground",
@@ -50,7 +50,7 @@ export function JourneyProgress({ currentStep }: JourneyProgressProps) {
                 {/* ラベル（PC のみ） */}
                 <span
                   className={cn(
-                    "hidden md:inline text-xs",
+                    "hidden md:inline text-sm",
                     isCurrent ? "font-semibold text-foreground" : "text-muted-foreground",
                   )}
                 >

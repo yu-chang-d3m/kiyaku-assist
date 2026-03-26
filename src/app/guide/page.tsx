@@ -116,30 +116,30 @@ export default function GuidePage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <Card className="border-l-4 border-l-blue-500">
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm">決議要件の緩和</CardTitle>
+              <CardTitle className="text-base">{"\u2460"} 決議要件の緩和</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 出席者の3/4で規約変更可能に
               </p>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-green-500">
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm">管理の円滑化</CardTitle>
+              <CardTitle className="text-base">{"\u2461"} 管理の円滑化</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 所在不明者の議決権排除制度、管理組合法人の設立要件緩和
               </p>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-amber-500">
             <CardHeader className="pb-1">
-              <CardTitle className="text-sm">区分所有建物の再生</CardTitle>
+              <CardTitle className="text-base">{"\u2462"} 区分所有建物の再生</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 建替え・取壊し等の多数決要件引き下げ
               </p>
             </CardContent>
@@ -170,7 +170,7 @@ export default function GuidePage() {
           <CardContent className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6">
             <div>
               <p className="font-medium">内容は理解できましたか？</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 次のステップで現行規約をアップロードし、AIに分析してもらいましょう。
               </p>
             </div>

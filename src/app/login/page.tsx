@@ -130,10 +130,10 @@ function LoginPageContent() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center space-y-2">
             <CardTitle className="text-2xl font-bold tracking-tight">
-              キヤクアシスト
+              <span>規約</span><span className="text-primary">リノベ</span>
             </CardTitle>
             <p className="text-base text-muted-foreground">
-              マンション管理規約改正AIアシスタント
+              マンション管理規約のAI改正支援ツール
             </p>
           </CardHeader>
 

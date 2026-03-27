@@ -160,7 +160,7 @@ describe("RAG パイプライン — generateChatResponse", () => {
       await generateChatResponse(request);
 
       const createCall = mockClaudeClient._mockCreate.mock.calls[0][0];
-      expect(createCall.system).toContain("キヤクアシスト");
+      expect(createCall.system).toContain("規約リノベ");
       expect(createCall.system).toContain("弁護士法72条");
     });
 

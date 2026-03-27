@@ -34,7 +34,7 @@ const RAG_TOP_K = 5;
 const MAX_HISTORY_MESSAGES = 10;
 
 /** チャットのシステムプロンプト */
-const CHAT_SYSTEM_PROMPT = `あなたは「キヤクアシスト」のチャットアシスタントです。
+const CHAT_SYSTEM_PROMPT = `あなたは「規約リノベ」のチャットアシスタントです。
 マンション管理規約の改定を支援するために、以下の知識を使って質問に回答してください。
 
 ## あなたの役割

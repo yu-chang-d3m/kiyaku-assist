@@ -44,7 +44,7 @@ export const logger = pino({
     : {}),
   // ベースコンテキスト（全ログに含まれる）
   base: {
-    service: "kiyaku-assist",
+    service: "kiyaku-rinove",
     version: process.env.npm_package_version ?? "0.1.0",
   },
   // タイムスタンプのフォーマット

@@ -249,12 +249,12 @@ export function AppHeader({ currentStep, showProgress = true }: AppHeaderProps) 
       <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
         <Link href="/">
           <h1 className="text-lg font-bold tracking-tight">
-            キヤクアシスト
+            <span>規約</span><span className="text-primary">リノベ</span>
           </h1>
         </Link>
         <div className="flex items-center gap-3">
           <p className="text-sm text-muted-foreground hidden sm:block">
-            マンション管理規約改正AIアシスタント
+            マンション管理規約のAI改正支援ツール
           </p>
           <Link
             href="/chat"

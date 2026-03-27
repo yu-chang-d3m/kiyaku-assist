@@ -36,24 +36,24 @@ import {
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-screen bg-white">
+    <div className="flex flex-col min-h-screen bg-background">
       <LPHeader />
 
       <main className="flex-1">
         {/* ===== Hero ===== */}
-        <section className="relative overflow-hidden bg-gradient-to-b from-blue-50 via-blue-50/30 to-white">
+        <section className="relative overflow-hidden bg-gradient-to-b from-primary/5 via-primary/3 to-background">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-16 pb-12 sm:pt-24 sm:pb-20 text-center">
-            <Badge className="mb-6 bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100 text-sm px-4 py-1.5">
+            <Badge className="mb-6 bg-primary/10 text-primary border-primary/20 hover:bg-primary/10 text-sm px-4 py-1.5">
               改正区分所有法（2026年4月施行）対応済み
             </Badge>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-gray-900 leading-tight">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground leading-tight">
               マンション管理規約を、
               <br className="hidden sm:block" />
-              <span className="text-blue-600">リノベ</span>しよう。
+              <span className="text-primary">リノベ</span>しよう。
             </h1>
 
-            <p className="mt-6 text-lg sm:text-xl leading-relaxed text-gray-600 max-w-2xl mx-auto">
+            <p className="mt-6 text-lg sm:text-xl leading-relaxed text-muted-foreground max-w-2xl mx-auto">
               2026年4月、改正区分所有法が施行されます。
               <br className="hidden sm:block" />
               あなたのマンションの規約は準備できていますか？
@@ -64,7 +64,7 @@ export default function Home() {
             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
               <Button
                 size="lg"
-                className="bg-blue-600 hover:bg-blue-700 text-white text-lg px-8 py-6 h-auto"
+                className="text-lg px-8 py-6 h-auto"
                 asChild
               >
                 <Link href="/login">
@@ -75,14 +75,14 @@ export default function Home() {
               <Button
                 variant="outline"
                 size="lg"
-                className="text-lg px-8 py-6 h-auto border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="text-lg px-8 py-6 h-auto"
                 asChild
               >
                 <Link href="#how-it-works">使い方を見る</Link>
               </Button>
             </div>
 
-            <p className="mt-4 text-sm text-gray-500">
+            <p className="mt-4 text-sm text-muted-foreground">
               登録は1分・クレジットカード不要
             </p>
           </div>
@@ -92,53 +92,53 @@ export default function Home() {
         <ProjectList />
 
         {/* ===== Pain Points ===== */}
-        <section className="bg-gray-50 py-16 sm:py-24">
+        <section className="bg-muted/50 py-16 sm:py-24">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-4">
+            <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground mb-4">
               規約改正、こんなお悩みはありませんか？
             </h2>
-            <p className="text-center text-gray-500 mb-12 text-lg">
+            <p className="text-center text-muted-foreground mb-12 text-lg">
               全国12万の管理組合が直面している課題です
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              <Card className="border-0 shadow-sm bg-white">
+              <Card className="border-0 shadow-sm">
                 <CardContent className="pt-8 pb-6 px-6 text-center">
                   <div className="mx-auto mb-4 flex items-center justify-center size-14 rounded-2xl bg-red-50">
                     <CircleDollarSign className="size-7 text-red-500" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
                     専門家への依頼は高額
                   </h3>
-                  <p className="text-base leading-relaxed text-gray-600">
+                  <p className="text-base leading-relaxed text-muted-foreground">
                     マンション管理士や弁護士に依頼すると46〜58万円。管理会社経由でも10万円以上かかります。
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="border-0 shadow-sm bg-white">
+              <Card className="border-0 shadow-sm">
                 <CardContent className="pt-8 pb-6 px-6 text-center">
                   <div className="mx-auto mb-4 flex items-center justify-center size-14 rounded-2xl bg-amber-50">
                     <CircleHelp className="size-7 text-amber-500" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
                     何から始めればいいかわからない
                   </h3>
-                  <p className="text-base leading-relaxed text-gray-600">
+                  <p className="text-base leading-relaxed text-muted-foreground">
                     改正点は30項目以上。法律用語が難解で、理事会だけで対応するのは不安です。
                   </p>
                 </CardContent>
               </Card>
 
-              <Card className="border-0 shadow-sm bg-white">
+              <Card className="border-0 shadow-sm">
                 <CardContent className="pt-8 pb-6 px-6 text-center">
-                  <div className="mx-auto mb-4 flex items-center justify-center size-14 rounded-2xl bg-blue-50">
-                    <Clock className="size-7 text-blue-500" />
+                  <div className="mx-auto mb-4 flex items-center justify-center size-14 rounded-2xl bg-primary/5">
+                    <Clock className="size-7 text-primary" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
                     時間が足りない
                   </h3>
-                  <p className="text-base leading-relaxed text-gray-600">
+                  <p className="text-base leading-relaxed text-muted-foreground">
                     理事会は月に1〜2回。本業もある中で、法改正を追いかける余裕がありません。
                   </p>
                 </CardContent>
@@ -150,40 +150,40 @@ export default function Home() {
         {/* ===== Numbers ===== */}
         <section className="py-16 sm:py-24">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-12">
+            <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground mb-12">
               規約リノベなら、こう変わります
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-12">
               <div className="text-center">
-                <p className="text-4xl sm:text-5xl font-bold text-blue-600 mb-3">
+                <p className="text-4xl sm:text-5xl font-bold text-primary mb-3">
                   1/100
                 </p>
-                <p className="text-lg font-medium text-gray-900 mb-1">
+                <p className="text-lg font-medium text-foreground mb-1">
                   専門家費用の約1/100
                 </p>
-                <p className="text-base text-gray-500">
+                <p className="text-base text-muted-foreground">
                   46〜58万円 → 数千円程度に
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-4xl sm:text-5xl font-bold text-blue-600 mb-3">
+                <p className="text-4xl sm:text-5xl font-bold text-primary mb-3">
                   2〜3時間
                 </p>
-                <p className="text-lg font-medium text-gray-900 mb-1">
+                <p className="text-lg font-medium text-foreground mb-1">
                   ご自分のペースで完了
                 </p>
-                <p className="text-base text-gray-500">
+                <p className="text-base text-muted-foreground">
                   6ステップを空いた時間に少しずつ
                 </p>
               </div>
               <div className="text-center">
-                <p className="text-4xl sm:text-5xl font-bold text-blue-600 mb-3">
+                <p className="text-4xl sm:text-5xl font-bold text-primary mb-3">
                   令和7年
                 </p>
-                <p className="text-lg font-medium text-gray-900 mb-1">
+                <p className="text-lg font-medium text-foreground mb-1">
                   最新の標準管理規約に完全準拠
                 </p>
-                <p className="text-base text-gray-500">
+                <p className="text-base text-muted-foreground">
                   2025年10月改正版を基準データに採用
                 </p>
               </div>
@@ -192,31 +192,31 @@ export default function Home() {
         </section>
 
         {/* ===== How It Works ===== */}
-        <section id="how-it-works" className="bg-gray-50 py-16 sm:py-24 scroll-mt-16">
+        <section id="how-it-works" className="bg-muted/50 py-16 sm:py-24 scroll-mt-16">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-4">
+            <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground mb-4">
               6つのステップで完了します
             </h2>
-            <p className="text-center text-gray-500 mb-12 text-lg">
+            <p className="text-center text-muted-foreground mb-12 text-lg">
               全体の所要時間は約2〜3時間。ご自分のペースで進められます。
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {JOURNEY_STEPS.map((step, index) => (
-                <Card key={step.id} className="border border-gray-200 bg-white shadow-sm">
+                <Card key={step.id} className="shadow-sm">
                   <CardContent className="pt-6 pb-5 px-6">
                     <div className="flex items-center gap-3 mb-3">
-                      <span className="flex items-center justify-center size-9 rounded-full bg-blue-600 text-white text-sm font-bold">
+                      <span className="flex items-center justify-center size-9 rounded-full bg-primary text-primary-foreground text-sm font-bold">
                         {index + 1}
                       </span>
-                      <h3 className="text-lg font-semibold text-gray-900">
+                      <h3 className="text-lg font-semibold text-foreground">
                         {step.label}
                       </h3>
                     </div>
-                    <p className="text-base leading-relaxed text-gray-600">
+                    <p className="text-base leading-relaxed text-muted-foreground">
                       {step.description}
                     </p>
-                    <p className="text-sm text-gray-400 mt-3">
+                    <p className="text-sm text-muted-foreground/60 mt-3">
                       目安: 約{step.estimatedMinutes}分
                     </p>
                   </CardContent>
@@ -229,59 +229,55 @@ export default function Home() {
         {/* ===== Features ===== */}
         <section className="py-16 sm:py-24">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-12">
+            <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground mb-12">
               規約リノベが選ばれる理由
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {/* Feature 1 */}
-              <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-blue-50/50 to-white p-8">
-                <div className="mb-4 flex items-center justify-center size-12 rounded-xl bg-blue-100">
-                  <FileSearch className="size-6 text-blue-600" />
+              <div className="rounded-2xl border bg-gradient-to-br from-primary/5 to-background p-8">
+                <div className="mb-4 flex items-center justify-center size-12 rounded-xl bg-primary/10">
+                  <FileSearch className="size-6 text-primary" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                <h3 className="text-lg font-semibold text-foreground mb-2">
                   AIが法改正を自動チェック
                 </h3>
-                <p className="text-base leading-relaxed text-gray-600">
+                <p className="text-base leading-relaxed text-muted-foreground">
                   改正区分所有法と標準管理規約の全改正項目を、AIが現行規約と自動比較。30項目以上の改正点を見落としなくチェックします。
                 </p>
               </div>
 
-              {/* Feature 2 */}
-              <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-blue-50/50 to-white p-8">
-                <div className="mb-4 flex items-center justify-center size-12 rounded-xl bg-blue-100">
-                  <MessageSquareText className="size-6 text-blue-600" />
+              <div className="rounded-2xl border bg-gradient-to-br from-primary/5 to-background p-8">
+                <div className="mb-4 flex items-center justify-center size-12 rounded-xl bg-primary/10">
+                  <MessageSquareText className="size-6 text-primary" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                <h3 className="text-lg font-semibold text-foreground mb-2">
                   条文ごとにわかりやすく解説
                 </h3>
-                <p className="text-base leading-relaxed text-gray-600">
+                <p className="text-base leading-relaxed text-muted-foreground">
                   法律用語をかみ砕いて、「何が変わるか」「なぜ変える必要があるか」を理事会目線で説明。わからないことはAIにいつでも質問できます。
                 </p>
               </div>
 
-              {/* Feature 3 */}
-              <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-blue-50/50 to-white p-8">
-                <div className="mb-4 flex items-center justify-center size-12 rounded-xl bg-blue-100">
-                  <FileOutput className="size-6 text-blue-600" />
+              <div className="rounded-2xl border bg-gradient-to-br from-primary/5 to-background p-8">
+                <div className="mb-4 flex items-center justify-center size-12 rounded-xl bg-primary/10">
+                  <FileOutput className="size-6 text-primary" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                <h3 className="text-lg font-semibold text-foreground mb-2">
                   改正案をワンクリックで生成
                 </h3>
-                <p className="text-base leading-relaxed text-gray-600">
+                <p className="text-base leading-relaxed text-muted-foreground">
                   標準管理規約に準拠した改正案を自動生成。新旧対照表つきで、条文ごとに「採用・修正・保留」を選べます。
                 </p>
               </div>
 
-              {/* Feature 4 */}
-              <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-blue-50/50 to-white p-8">
-                <div className="mb-4 flex items-center justify-center size-12 rounded-xl bg-blue-100">
-                  <Building2 className="size-6 text-blue-600" />
+              <div className="rounded-2xl border bg-gradient-to-br from-primary/5 to-background p-8">
+                <div className="mb-4 flex items-center justify-center size-12 rounded-xl bg-primary/10">
+                  <Building2 className="size-6 text-primary" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                <h3 className="text-lg font-semibold text-foreground mb-2">
                   そのまま総会へ持ち込める出力
                 </h3>
-                <p className="text-base leading-relaxed text-gray-600">
+                <p className="text-base leading-relaxed text-muted-foreground">
                   理事会配布用PDF、総会議案書、住民説明資料をボタンひとつで出力。差分ハイライトつきで住民への説明もスムーズです。
                 </p>
               </div>
@@ -290,9 +286,9 @@ export default function Home() {
         </section>
 
         {/* ===== Comparison ===== */}
-        <section className="bg-gray-50 py-16 sm:py-24">
+        <section className="bg-muted/50 py-16 sm:py-24">
           <div className="max-w-4xl mx-auto px-4 sm:px-6">
-            <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-12">
+            <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground mb-12">
               従来の方法と比べてください
             </h2>
 
@@ -300,84 +296,84 @@ export default function Home() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className="py-4 px-4 text-base font-medium text-gray-500 border-b border-gray-200 w-1/3">
+                    <th className="py-4 px-4 text-base font-medium text-muted-foreground border-b w-1/3">
                       比較項目
                     </th>
-                    <th className="py-4 px-4 text-base font-medium text-gray-500 border-b border-gray-200 w-1/3">
+                    <th className="py-4 px-4 text-base font-medium text-muted-foreground border-b w-1/3">
                       専門家に委託
                     </th>
-                    <th className="py-4 px-4 text-base font-semibold text-blue-600 border-b-2 border-blue-600 w-1/3 bg-blue-50/50 rounded-t-lg">
+                    <th className="py-4 px-4 text-base font-semibold text-primary border-b-2 border-primary w-1/3 bg-primary/5 rounded-t-lg">
                       規約リノベ
                     </th>
                   </tr>
                 </thead>
                 <tbody className="text-base">
                   <tr>
-                    <td className="py-4 px-4 border-b border-gray-100 font-medium text-gray-700">
+                    <td className="py-4 px-4 border-b font-medium text-foreground">
                       費用
                     </td>
-                    <td className="py-4 px-4 border-b border-gray-100 text-gray-600">
+                    <td className="py-4 px-4 border-b text-muted-foreground">
                       46〜58万円
                     </td>
-                    <td className="py-4 px-4 border-b border-gray-100 text-blue-700 font-semibold bg-blue-50/30">
+                    <td className="py-4 px-4 border-b text-primary font-semibold bg-primary/5">
                       <span className="flex items-center gap-1.5">
-                        <CheckCircle className="size-4 text-blue-500 shrink-0" />
+                        <CheckCircle className="size-4 text-primary shrink-0" />
                         無料（ベータ版）
                       </span>
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-4 px-4 border-b border-gray-100 font-medium text-gray-700">
+                    <td className="py-4 px-4 border-b font-medium text-foreground">
                       所要期間
                     </td>
-                    <td className="py-4 px-4 border-b border-gray-100 text-gray-600">
+                    <td className="py-4 px-4 border-b text-muted-foreground">
                       2〜3ヶ月
                     </td>
-                    <td className="py-4 px-4 border-b border-gray-100 text-blue-700 font-semibold bg-blue-50/30">
+                    <td className="py-4 px-4 border-b text-primary font-semibold bg-primary/5">
                       <span className="flex items-center gap-1.5">
-                        <CheckCircle className="size-4 text-blue-500 shrink-0" />
+                        <CheckCircle className="size-4 text-primary shrink-0" />
                         2〜3時間
                       </span>
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-4 px-4 border-b border-gray-100 font-medium text-gray-700">
+                    <td className="py-4 px-4 border-b font-medium text-foreground">
                       改正項目カバー
                     </td>
-                    <td className="py-4 px-4 border-b border-gray-100 text-gray-600">
+                    <td className="py-4 px-4 border-b text-muted-foreground">
                       担当者による
                     </td>
-                    <td className="py-4 px-4 border-b border-gray-100 text-blue-700 font-semibold bg-blue-50/30">
+                    <td className="py-4 px-4 border-b text-primary font-semibold bg-primary/5">
                       <span className="flex items-center gap-1.5">
-                        <CheckCircle className="size-4 text-blue-500 shrink-0" />
+                        <CheckCircle className="size-4 text-primary shrink-0" />
                         全項目を網羅的にチェック
                       </span>
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-4 px-4 border-b border-gray-100 font-medium text-gray-700">
+                    <td className="py-4 px-4 border-b font-medium text-foreground">
                       成果物
                     </td>
-                    <td className="py-4 px-4 border-b border-gray-100 text-gray-600">
+                    <td className="py-4 px-4 border-b text-muted-foreground">
                       改正案のみ
                     </td>
-                    <td className="py-4 px-4 border-b border-gray-100 text-blue-700 font-semibold bg-blue-50/30">
+                    <td className="py-4 px-4 border-b text-primary font-semibold bg-primary/5">
                       <span className="flex items-center gap-1.5">
-                        <CheckCircle className="size-4 text-blue-500 shrink-0" />
+                        <CheckCircle className="size-4 text-primary shrink-0" />
                         改正案 + 議案書 + 説明資料
                       </span>
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-4 px-4 font-medium text-gray-700">
+                    <td className="py-4 px-4 font-medium text-foreground">
                       理事会の理解
                     </td>
-                    <td className="py-4 px-4 text-gray-600">
+                    <td className="py-4 px-4 text-muted-foreground">
                       専門家任せになりがち
                     </td>
-                    <td className="py-4 px-4 text-blue-700 font-semibold bg-blue-50/30 rounded-b-lg">
+                    <td className="py-4 px-4 text-primary font-semibold bg-primary/5 rounded-b-lg">
                       <span className="flex items-center gap-1.5">
-                        <CheckCircle className="size-4 text-blue-500 shrink-0" />
+                        <CheckCircle className="size-4 text-primary shrink-0" />
                         理事会が主体的に理解・判断
                       </span>
                     </td>
@@ -392,16 +388,16 @@ export default function Home() {
         <section className="py-12 sm:py-16">
           <div className="max-w-4xl mx-auto px-4 sm:px-6">
             <div className="flex flex-wrap justify-center gap-6 sm:gap-10">
-              <div className="flex items-center gap-2 text-gray-500">
-                <ShieldCheck className="size-5 text-blue-500" />
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <ShieldCheck className="size-5 text-primary" />
                 <span className="text-base">国交省標準管理規約準拠</span>
               </div>
-              <div className="flex items-center gap-2 text-gray-500">
-                <ShieldCheck className="size-5 text-blue-500" />
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <ShieldCheck className="size-5 text-primary" />
                 <span className="text-base">改正区分所有法対応</span>
               </div>
-              <div className="flex items-center gap-2 text-gray-500">
-                <ShieldCheck className="size-5 text-blue-500" />
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <ShieldCheck className="size-5 text-primary" />
                 <span className="text-base">データ暗号化・安全な通信</span>
               </div>
             </div>
@@ -412,19 +408,19 @@ export default function Home() {
         <FAQSection />
 
         {/* ===== Final CTA ===== */}
-        <section className="bg-gradient-to-br from-blue-600 to-blue-700 py-16 sm:py-24">
+        <section className="bg-primary py-16 sm:py-24">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-            <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
+            <h2 className="text-2xl sm:text-3xl font-bold text-primary-foreground mb-4">
               あなたのマンション規約も、
               <br className="sm:hidden" />
               リノベしませんか？
             </h2>
-            <p className="text-lg text-blue-100 mb-10">
+            <p className="text-lg text-primary-foreground/80 mb-10">
               改正法の施行まで、あと少し。今すぐ始めましょう。
             </p>
             <Button
               size="lg"
-              className="bg-white text-blue-700 hover:bg-blue-50 text-lg px-10 py-6 h-auto font-semibold"
+              className="bg-white text-primary hover:bg-white/90 text-lg px-10 py-6 h-auto font-semibold"
               asChild
             >
               <Link href="/login">
@@ -432,7 +428,7 @@ export default function Home() {
                 <ArrowRight className="size-5 ml-1" />
               </Link>
             </Button>
-            <p className="mt-4 text-sm text-blue-200">
+            <p className="mt-4 text-sm text-primary-foreground/60">
               登録は1分・クレジットカード不要
             </p>
           </div>

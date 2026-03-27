@@ -38,16 +38,16 @@ export function FAQSection() {
   return (
     <section id="faq" className="py-16 sm:py-24">
       <div className="max-w-3xl mx-auto px-4 sm:px-6">
-        <h2 className="text-2xl sm:text-3xl font-bold text-center text-gray-900 mb-12">
+        <h2 className="text-2xl sm:text-3xl font-bold text-center text-foreground mb-12">
           よくあるご質問
         </h2>
         <Accordion type="single" collapsible className="w-full">
           {FAQ_ITEMS.map((item, i) => (
             <AccordionItem key={i} value={`faq-${i}`}>
-              <AccordionTrigger className="text-left text-base sm:text-lg font-medium text-gray-900 py-5">
+              <AccordionTrigger className="text-left text-base sm:text-lg font-medium text-foreground py-5">
                 {item.q}
               </AccordionTrigger>
-              <AccordionContent className="text-base leading-relaxed text-gray-600">
+              <AccordionContent className="text-base leading-relaxed text-muted-foreground">
                 {item.a}
               </AccordionContent>
             </AccordionItem>

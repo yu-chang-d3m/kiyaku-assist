@@ -133,7 +133,7 @@ export class MarkdownGenerator implements ExportGenerator {
     // フッター
     lines.push("");
     lines.push(
-      "※ 本資料はキヤクアシストにより自動生成されたものです。法的助言ではありません。",
+      "※ 本資料は規約リノベにより自動生成されたものです。法的助言ではありません。",
     );
     lines.push(
       "※ 最終的な規約案の決定にあたっては、マンション管理士や弁護士等の専門家にご相談ください。",

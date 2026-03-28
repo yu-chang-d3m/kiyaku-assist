@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gcloud logging:*)",
+      "Bash(grep -r \"eval\\\\|Function\\\\|dangerouslySetInnerHTML\" /Users/uchan/d3m_condo_bylaws_pj/kiyaku-assist-v2/src --include=*.ts --include=*.tsx)",
+      "Bash(grep -r \"\\\\.then\\\\\\(\\\\|\\\\.catch\\\\\\(\" /Users/uchan/d3m_condo_bylaws_pj/kiyaku-assist-v2/src --include=*.ts --include=*.tsx)",
+      "Bash(npm outdated:*)",
+      "Bash(node tmp_pdf_test.mjs)",
+      "Bash(node tmp_pdf_test2.mjs)",
+      "Read(//Users/uchan/**)",
+      "Read(//Users/uchan/Downloads/**)",
+      "Bash(npx tsx:*)",
+      "Bash(find /Users/uchan/d3m_condo_bylaws_pj/kiyaku-assist-v2/src -type f \\\\\\(-name *repository* -o -name *repo* -o -name *repository* \\\\\\))",
+      "Bash(grep -n \"export async function\" /Users/uchan/d3m_condo_bylaws_pj/kiyaku-assist-v2/src/app/api/review/[projectId]/route.ts)",
+      "Bash(find /Users/uchan/d3m_condo_bylaws_pj -type f \\\\\\(-name *.json -o -name *playwright* -o -name *mcp* \\\\\\))",
+      "Bash(grep -r \"test\\\\|TEST\\\\|mock\\\\|MOCK\" /Users/uchan/d3m_condo_bylaws_pj/kiyaku-assist-v2/.env*)",
+      "Bash(npx playwright:*)"
+    ]
+  }
+}

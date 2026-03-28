@@ -17,6 +17,7 @@ import { getReviewArticles, patchReviewArticle, decideReview, callDraftSingle, s
 import type { ReviewArticle } from "@/shared/db/types";
 import type { GapAnalysisItem } from "@/domains/analysis/types";
 import { useProjectStore, loadProjectId, loadGapResults, saveReviewDecisions, loadReviewDecisions, saveReviewMemos, loadReviewMemos, loadOnboarding } from "@/shared/store";
+import { parseManagementDraft } from "@/shared/api-client";
 import { AuthGuard } from "@/shared/auth/auth-guard";
 import { ArticleDiffView } from "@/components/diff/article-diff-view";
 import { SemanticNavigator } from "@/components/review/semantic-navigator";
@@ -109,6 +110,9 @@ function ReviewPageContent() {
   const initDone = useRef(false);
   const memoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [memoSaveStatus, setMemoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // 管理会社案アップロード
+  const [mgmtDraftState, setMgmtDraftState] = useState<"idle" | "uploading" | "done" | "error">("idle");
+  const [mgmtDraftMessage, setMgmtDraftMessage] = useState("");
 
   // ---------- 初期化 ----------
   const gapToReview = useCallback(
@@ -384,6 +388,34 @@ function ReviewPageContent() {
     }
   }
 
+  /** 管理会社案アップロード */
+  const handleManagementDraftFile = useCallback(async (f: File) => {
+    const pid = loadProjectId();
+    if (!pid) return;
+    setMgmtDraftState("uploading");
+    setMgmtDraftMessage("");
+    parseManagementDraft(pid, { file: f }, {
+      onProgress: (data) => {
+        setMgmtDraftMessage(data.message ?? "解析中…");
+      },
+      onComplete: async (data) => {
+        setMgmtDraftState("done");
+        setMgmtDraftMessage(`${data.matched ?? 0}/${data.totalParsed ?? 0} 条文をマッチング完了`);
+        // データを再取得して managementDraft を反映
+        try {
+          const fetched = (await getReviewArticles(pid)).articles ?? [];
+          if (fetched.length > 0) setArticles(fetched);
+        } catch (err) {
+          console.error("管理会社案反映後のデータ再取得に失敗:", err);
+        }
+      },
+      onError: (msg) => {
+        setMgmtDraftState("error");
+        setMgmtDraftMessage(msg || "管理会社案のパースに失敗しました");
+      },
+    });
+  }, []);
+
   function handleToggleAll() {
     setCheckedIds(checkedIds.size === filteredArticles.length ? new Set() : new Set(filteredArticles.map((a) => a.id ?? "")));
   }
@@ -558,6 +590,38 @@ function ReviewPageContent() {
                 ? `一括生成 (${undraftedCount}件)`
                 : "全生成済み"}
           </Button>
+          {/* 管理会社案アップロード */}
+          {mgmtDraftState === "idle" && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => document.getElementById("mgmt-draft-input")?.click()}>
+                管理会社案をアップロード
+              </Button>
+              <input
+                id="mgmt-draft-input"
+                type="file"
+                accept=".txt,.pdf,.docx"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleManagementDraftFile(f);
+                }}
+              />
+            </>
+          )}
+          {mgmtDraftState === "uploading" && (
+            <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <Spinner /> {mgmtDraftMessage}
+            </span>
+          )}
+          {mgmtDraftState === "done" && (
+            <span className="text-sm text-green-700">{mgmtDraftMessage}</span>
+          )}
+          {mgmtDraftState === "error" && (
+            <span className="inline-flex items-center gap-2">
+              <span className="text-sm text-red-600">{mgmtDraftMessage}</span>
+              <Button size="sm" variant="ghost" onClick={() => setMgmtDraftState("idle")}>再試行</Button>
+            </span>
+          )}
           <span className="flex-1" />
           <Button size="sm" variant="destructive" onClick={handleDeleteSelected} disabled={checkedIds.size === 0}>
             削除 ({checkedIds.size})

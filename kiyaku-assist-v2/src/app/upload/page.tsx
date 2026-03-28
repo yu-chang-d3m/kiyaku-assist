@@ -20,10 +20,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
-import { callParse, callParseFile, saveParsedBylawsRemote, syncCurrentStep, parseManagementDraft } from "@/shared/api-client";
+import { callParse, callParseFile, saveParsedBylawsRemote, syncCurrentStep } from "@/shared/api-client";
 import type { ParseResult } from "@/domains/ingestion/types";
 import { saveParsedBylaws, loadProjectId } from "@/shared/store";
-import { Separator } from "@/components/ui/separator";
 import { AuthGuard } from "@/shared/auth/auth-guard";
 import { cn } from "@/lib/utils";
 
@@ -367,10 +366,6 @@ function UploadPageContent() {
   const [showTextInput, setShowTextInput] = useState(false);
   const [directText, setDirectText] = useState("");
   const [showDemoOption, setShowDemoOption] = useState(false);
-  // 管理会社案アップロード
-  const [mgmtDraftState, setMgmtDraftState] = useState<"idle" | "uploading" | "done" | "error">("idle");
-  const [mgmtDraftMessage, setMgmtDraftMessage] = useState("");
-  const [mgmtDraftProgress, setMgmtDraftProgress] = useState({ current: 0, total: 0, phase: "" });
 
   /** callParse を呼び出してパース結果を処理する共通関数 */
   const executeParse = useCallback(async (text: string) => {
@@ -498,38 +493,6 @@ function UploadPageContent() {
     }
     router.push("/analysis");
   }, [router]);
-
-  /** 管理会社案ファイルアップロード */
-  const handleManagementDraftFile = useCallback(async (f: File) => {
-    const pid = loadProjectId();
-    if (!pid) return;
-    setMgmtDraftState("uploading");
-    setMgmtDraftMessage("");
-
-    parseManagementDraft(
-      pid,
-      { file: f },
-      {
-        onProgress: (data) => {
-          setMgmtDraftProgress({
-            current: data.current ?? 0,
-            total: data.total ?? 0,
-            phase: data.message ?? "",
-          });
-        },
-        onComplete: (data) => {
-          setMgmtDraftState("done");
-          setMgmtDraftMessage(
-            `管理会社案: ${data.matched ?? 0}/${data.totalParsed ?? 0} 条文をマッチング完了`,
-          );
-        },
-        onError: (msg) => {
-          setMgmtDraftState("error");
-          setMgmtDraftMessage(msg || "管理会社案のパースに失敗しました");
-        },
-      },
-    );
-  }, []);
 
   /** やり直し */
   const handleReset = useCallback(() => {
@@ -794,68 +757,7 @@ function UploadPageContent() {
               </CardContent>
             </Card>
 
-            {/* 管理会社案アップロード（オプション） */}
-            <Card className="mb-6 border-dashed">
-              <CardHeader>
-                <CardTitle className="text-base">管理会社案のアップロード（任意）</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  管理会社が作成した規約改正案をお持ちの場合は、ここでアップロードすると3カラム比較（現行/管理会社案/AI改正案）が利用できます。
-                </p>
-              </CardHeader>
-              <CardContent>
-                {mgmtDraftState === "idle" && (
-                  <div className="flex items-center gap-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => document.getElementById("mgmt-draft-input")?.click()}
-                    >
-                      管理会社案をアップロード
-                    </Button>
-                    <input
-                      id="mgmt-draft-input"
-                      type="file"
-                      accept=".txt,.pdf,.docx"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) handleManagementDraftFile(f);
-                      }}
-                    />
-                    <span className="text-sm text-muted-foreground">PDF / Word / テキスト</span>
-                  </div>
-                )}
-                {mgmtDraftState === "uploading" && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <svg className="w-4 h-4 animate-spin text-primary" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <span>{mgmtDraftProgress.phase || "管理会社案を解析中..."}</span>
-                    {mgmtDraftProgress.total > 0 && (
-                      <span className="text-muted-foreground">
-                        ({mgmtDraftProgress.current}/{mgmtDraftProgress.total})
-                      </span>
-                    )}
-                  </div>
-                )}
-                {mgmtDraftState === "done" && (
-                  <p className="text-sm text-green-700">{mgmtDraftMessage}</p>
-                )}
-                {mgmtDraftState === "error" && (
-                  <div className="space-y-2">
-                    <p className="text-sm text-red-600">{mgmtDraftMessage}</p>
-                    <Button variant="outline" size="sm" onClick={() => setMgmtDraftState("idle")}>
-                      やり直す
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Separator className="mb-6" />
-
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-6">
               <Button
                 variant="outline"
                 onClick={handleReset}

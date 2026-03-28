@@ -902,8 +902,13 @@ export function parseManagementDraft(
   })
     .then(async (res) => {
       if (!res.ok || !res.body) {
-        const errorText = await res.text();
-        callbacks.onError?.(errorText || "管理会社案パースに失敗しました");
+        try {
+          const errorJson = await res.json() as { error?: string };
+          callbacks.onError?.(errorJson.error || "管理会社案パースに失敗しました");
+        } catch {
+          const errorText = await res.text();
+          callbacks.onError?.(errorText || "管理会社案パースに失敗しました");
+        }
         return;
       }
 

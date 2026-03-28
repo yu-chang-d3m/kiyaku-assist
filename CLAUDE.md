@@ -99,6 +99,19 @@ npm run test:coverage    # カバレッジ付き
 npm run test:ci          # CI 用（JUnit 出力）
 ```
 
+## ユーティリティスクリプト
+
+```bash
+# スキルテンプレートから SKILL.md を再生成
+./scripts/gen-skill-docs.sh              # 全スキル
+./scripts/gen-skill-docs.sh deploy       # 指定スキルのみ
+
+# スキル使用ログ記録
+./scripts/log-skill-usage.sh <skill> <outcome> [duration_s]
+# 例: ./scripts/log-skill-usage.sh deploy success 45
+# ログ: ~/.kiyaku/analytics/skill-usage.jsonl
+```
+
 ## 絶対守るべき技術制約
 
 1. **Zod**: `import * as z from "zod/v4"` で統一

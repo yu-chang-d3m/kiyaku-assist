@@ -91,6 +91,24 @@ test.describe("カスタマージャーニー通しテスト", () => {
         page.locator('[data-test="onboarding-option-3to6months"]'),
       ).toBeVisible();
       await page.locator('[data-test="onboarding-option-3to6months"]').click();
+      await page.locator('[data-test="onboarding-next"]').click();
+
+      // Q7: 所在地（任意 → スキップ）
+      await expect(
+        page.locator('[data-test="onboarding-input-location"]'),
+      ).toBeVisible();
+      await page.locator('[data-test="onboarding-next"]').click();
+
+      // Q8: 管理会社名（任意 → スキップ）
+      await expect(
+        page.locator('[data-test="onboarding-input-managementCompany"]'),
+      ).toBeVisible();
+      await page.locator('[data-test="onboarding-next"]').click();
+
+      // Q9: 築年数（任意 → スキップ）
+      await expect(
+        page.locator('[data-test="onboarding-input-buildingAge"]'),
+      ).toBeVisible();
     });
 
     await test.step(
@@ -259,9 +277,11 @@ test.describe("カスタマージャーニー通しテスト", () => {
       }
       // レビュー画面のデータ読み込みを待つ
       await expect(
-        page.getByRole("heading", { name: "条文レビュー" }).or(
+        page.getByRole("heading", { name: "改正案レビュー" }).or(
+          page.getByRole("heading", { name: "条文レビュー" }),
+        ).or(
           page.getByRole("columnheader", { name: "判断" }),
-        ),
+        ).first(),
       ).toBeVisible({ timeout: 30000 });
 
       // AI推奨を全て承認ボタンがあればクリック

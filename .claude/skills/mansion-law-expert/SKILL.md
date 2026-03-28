@@ -1,5 +1,6 @@
 ---
 name: mansion-law-expert
+preamble-tier: 2
 description: |
   マンション管理規約の改正・法改正対応の専門家スキル。
   マンション管理士と区分所有法に精通した弁護士の視点から、
@@ -129,6 +130,19 @@ argument-hint: "[質問内容 or 条文番号 or チェック対象]"
 - [references/practical-guide.md](references/practical-guide.md) — 規約改正の実務ガイド
 - [references/legal-risks.md](references/legal-risks.md) — 法的リスクチェックリスト
 - [references/non-ben-boundary.md](references/non-ben-boundary.md) — 非弁行為の境界線詳細（弁護士法72条）
+
+## エスカレーションプロトコル
+
+以下の条件で作業を停止し、ユーザーに報告する:
+
+- **3回の試行失敗**: 同じアプローチを3回試して解決しない場合
+- **セキュリティの不確実性**: 認証、データ漏洩、非弁リスクに関する判断に迷う場合
+- **ドメイン境界の逸脱**: 修正が複数ドメインにまたがり、影響範囲が不明確な場合
+
+報告フォーマット:
+- **REASON**: なぜ停止したか
+- **ATTEMPTED**: 試行した内容（最大3つ）
+- **RECOMMENDATION**: 推奨する次のステップ
 
 ## 完了報告
 

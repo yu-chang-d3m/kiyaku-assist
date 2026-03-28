@@ -1,0 +1,59 @@
+{
+  "version": "1.0.0",
+  "description": "キヤクアシスト v2 マルチ AI オーケストレーション設定",
+  "agents": {
+    "router": {
+      "description": "質問分類・ルーティング",
+      "model": "claude-haiku-4-5-20251001",
+      "role": "ユーザーの入力を分類し、適切なエージェントにルーティング",
+      "categories": ["legal-qa", "technical", "general", "out-of-scope"]
+    },
+    "rag-responder": {
+      "description": "RAG ベースの回答生成",
+      "model": "claude-sonnet-4-5-20250514",
+      "role": "Vertex AI Search の検索結果を元に規約関連の回答を生成",
+      "tools": ["vertex-ai-search"],
+      "guardrails": ["non-ben-check"]
+    },
+    "verifier": {
+      "description": "回答の法的正確性を検証",
+      "model": "claude-sonnet-4-5-20250514",
+      "role": "RAG 回答の法的正確性、条文番号、引用の正確さを検証",
+      "checks": ["article-number-accuracy", "legal-citation", "non-ben-compliance"]
+    },
+    "summarizer": {
+      "description": "回答の要約・簡潔化",
+      "model": "claude-haiku-4-5-20251001",
+      "role": "長い回答を高齢者にも理解しやすい形に要約",
+      "constraints": ["plain-language", "max-500-chars-summary"]
+    }
+  },
+  "pipelines": {
+    "chat-qa": {
+      "description": "チャット Q&A パイプライン",
+      "steps": ["router", "rag-responder", "verifier", "summarizer"],
+      "fallback": "router が out-of-scope と判定した場合は定型応答"
+    },
+    "gap-analysis": {
+      "description": "ギャップ分析パイプライン",
+      "steps": ["rag-responder"],
+      "note": "現在は単一エージェント。将来的に verifier を追加可能"
+    },
+    "draft-generation": {
+      "description": "ドラフト生成パイプライン",
+      "steps": ["rag-responder", "verifier"],
+      "note": "生成後に条文番号と引用の正確性を検証"
+    }
+  },
+  "guardrails": {
+    "non-ben-check": {
+      "description": "非弁行為（弁護士法72条）のガードレール",
+      "trigger": "法的助言と解釈されうる回答",
+      "action": "免責文言を付加し、専門家への相談を推奨"
+    }
+  },
+  "cost-optimization": {
+    "strategy": "route-by-complexity",
+    "note": "Haiku でルーティング・要約、Sonnet で生成・検証。Haiku は Sonnet の約 1/10 コスト"
+  }
+}

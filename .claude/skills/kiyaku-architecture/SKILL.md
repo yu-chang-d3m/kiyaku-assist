@@ -1,5 +1,6 @@
 ---
 name: kiyaku-architecture
+preamble-tier: 2
 description: |
   キヤクアシスト v2 のアーキテクチャ知識。DDD + Clean Architecture の境界ルール、
   Firebase 設計パターン、API Route 設計規約、データフロー制約を提供。
@@ -53,6 +54,19 @@ description: |
 | 規約パース（高速・低コスト） | Claude Haiku 4.5 | `MODELS.PARSE` |
 | ギャップ分析・ドラフト生成 | Claude Sonnet 4.5 | `MODELS.ANALYSIS` |
 | チャット Q&A | Claude Sonnet 4.5 | `MODELS.CHAT` |
+
+## エスカレーションプロトコル
+
+以下の条件で作業を停止し、ユーザーに報告する:
+
+- **3回の試行失敗**: 同じアプローチを3回試して解決しない場合
+- **セキュリティの不確実性**: 認証、データ漏洩、非弁リスクに関する判断に迷う場合
+- **ドメイン境界の逸脱**: 修正が複数ドメインにまたがり、影響範囲が不明確な場合
+
+報告フォーマット:
+- **REASON**: なぜ停止したか
+- **ATTEMPTED**: 試行した内容（最大3つ）
+- **RECOMMENDATION**: 推奨する次のステップ
 
 ## 参照ファイル
 

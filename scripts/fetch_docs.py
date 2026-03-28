@@ -2,10 +2,23 @@ import urllib.request
 import urllib.parse
 import re
 import os
+from pathlib import Path
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from pypdf import PdfReader
 from io import BytesIO
+
+# プロジェクトルートを基準にパスを解決（scripts/ の親ディレクトリ）
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_MLIT = PROJECT_ROOT / "data" / "mlit"
+DATA_MOJ = PROJECT_ROOT / "data" / "moj"
+DATA_NIHON_HOUSING = PROJECT_ROOT / "data" / "nihon-housing"
+
+def ensure_dirs():
+    """出力先ディレクトリを作成（存在しない場合）"""
+    DATA_MLIT.mkdir(parents=True, exist_ok=True)
+    DATA_MOJ.mkdir(parents=True, exist_ok=True)
+    DATA_NIHON_HOUSING.mkdir(parents=True, exist_ok=True)
 
 def fetch_moj_page():
     url = "https://www.moj.go.jp/MINJI/minji07_00325.html"
@@ -20,11 +33,12 @@ def fetch_moj_page():
     
     markdown_content = md(str(main_content), heading_style="ATX", escape_asterisks=False)
     
-    with open("data/moj/moj_minji_07_00325.md", "w", encoding="utf-8") as f:
+    out_path = DATA_MOJ / "moj_minji_07_00325.md"
+    with open(out_path, "w", encoding="utf-8") as f:
         f.write("# 法務省：区分所有法制の見直し\n")
         f.write(f"Source URL: {url}\n\n")
         f.write(markdown_content)
-    print("Saved moj_minji_07_00325.md")
+    print(f"Saved {out_path}")
 
 def fetch_mlit_page_and_pdf():
     url = "https://www.mlit.go.jp/jutakukentiku/house/jutakukentiku_house_tk5_000052.html"
@@ -62,16 +76,18 @@ def fetch_mlit_page_and_pdf():
         for page in reader.pages:
             extracted_text += page.extract_text() + "\n\n"
         
-        with open("data/mlit/mlit_mansion_kyaku_shinkyu_taishou.md", "w", encoding="utf-8") as f:
+        out_path = DATA_MLIT / "mlit_mansion_kyaku_shinkyu_taishou.md"
+        with open(out_path, "w", encoding="utf-8") as f:
             f.write("# 国土交通省：マンション標準管理規約（単棟型）新旧対照表\n")
             f.write(f"Source URL: {pdf_url}\n\n")
             f.write("```text\n")
             f.write(extracted_text)
             f.write("\n```\n")
-        print("Saved mlit_mansion_kyaku_shinkyu_taishou.md")
+        print(f"Saved {out_path}")
     else:
         print("Could not find the PDF link for 新旧対照表 on MLIT page.")
 
 if __name__ == '__main__':
+    ensure_dirs()
     fetch_moj_page()
     fetch_mlit_page_and_pdf()

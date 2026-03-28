@@ -1,0 +1,101 @@
+# スキルテンプレート
+#
+# このファイルはスキル SKILL.md の共通構造を定義する。
+# 各スキルの SKILL.md.tmpl 内で以下のプレースホルダーを使用できる:
+#
+#   {{CLAUDE_MD_REF}}          — CLAUDE.md 参照リンク（1行）
+#   {{PREAMBLE_FOOTER}}       — Preamble 末尾の共通注記
+#   {{COMPLETION_STATUS}}     — 完了報告セクション（4ステータス）
+#   {{SESSION_LOG}}           — スキル使用ログ記録の案内
+#   {{CONTRIBUTOR_MODE}}      — Contributor mode（品質フィードバック）の案内
+#
+# 使い方:
+#   1. .claude/skills/{name}/SKILL.md.tmpl を作成
+#   2. 上記プレースホルダーを適宜配置
+#   3. ./scripts/gen-skill-docs.sh [name] で SKILL.md を生成
+
+# ============================================================
+# 推奨スキル構成（テンプレート作成時の参考）
+# ============================================================
+#
+# ---
+# name: <スキル名>
+# description: |
+#   <スキルの説明>
+#   Use when: <トリガーキーワード>
+# user-invocable: true|false
+# argument-hint: "[引数の説明]"
+# ---
+#
+# # <スキルタイトル>
+#
+# {{CLAUDE_MD_REF}}
+#
+# ## Preamble（実行前チェック）
+#
+# 1. CLAUDE.md を読み、プロジェクト設定を確認する
+# 2. <環境・前提条件のチェック>
+# 3. <実行モード・引数の解釈>
+#
+# {{PREAMBLE_FOOTER}}
+#
+# ## <メインワークフロー>
+#
+# （スキル固有の手順・ガイドライン）
+#
+# {{COMPLETION_STATUS}}
+#
+# {{SESSION_LOG}}
+#
+# {{CONTRIBUTOR_MODE}}
+
+# ============================================================
+# 共通パーツ定義（gen-skill-docs.sh が読み取る）
+# ============================================================
+
+# --- CLAUDE_MD_REF ---
+# > プロジェクト設定・技術スタック・制約は [CLAUDE.md](/Users/uchan/d3m_condo_bylaws_pj/CLAUDE.md) を参照。
+
+# --- PREAMBLE_FOOTER ---
+# > **注意**: Preamble のチェックでブロッカーが見つかった場合は、ワークフローを開始せず即座に **BLOCKED** または **NEEDS_CONTEXT** で報告する。
+
+# --- COMPLETION_STATUS ---
+# ## 完了報告
+#
+# 実行結果を以下のいずれかで報告する:
+# - **DONE**: 全ステップ完了、エビデンスあり
+# - **DONE_WITH_CONCERNS**: 完了したが既知の問題あり（リスト提示）
+# - **BLOCKED**: 続行不可（ブロッカーと試行内容を提示）
+# - **NEEDS_CONTEXT**: 必要な情報が不足（質問を提示）
+
+# --- SESSION_LOG ---
+# ## セッションログ
+#
+# スキル実行完了後、以下でログを記録する:
+# ```bash
+# ./scripts/log-skill-usage.sh <skill-name> <outcome> [duration_s]
+# ```
+# - outcome: success | error | abort | blocked
+# - ログ先: ~/.kiyaku/analytics/skill-usage.jsonl
+
+# --- CONTRIBUTOR_MODE ---
+# ## Contributor mode（品質フィードバック）
+#
+# 環境変数 `_CONTRIB=true` が設定されている場合、フィードバックモードが有効になる。
+#
+# ### 動作
+# 1. スキル実行完了後（完了報告の後）、ユーザーにフィードバックを記録するか確認する
+# 2. ユーザーが希望した場合、以下の3点を質問する:
+#    - **試したこと**: このスキルで何をしようとしたか
+#    - **結果**: 実際にどうなったか
+#    - **改善案**: 10点満点にするには何が必要か
+# 3. 評価（1-10）とともに以下のコマンドでログを記録する:
+# ```bash
+# ./scripts/log-contributor-feedback.sh <skill-name> <rating> "<tried>" "<happened>" "<improvement>"
+# ```
+# - ログ先: ~/.kiyaku/contributor-logs/
+# - 1日あたり最大3件まで
+#
+# ### 注意
+# - `_CONTRIB=true` が未設定の場合はフィードバック確認をスキップする
+# - フィードバックはあくまで任意。ユーザーが不要と答えた場合は記録しない

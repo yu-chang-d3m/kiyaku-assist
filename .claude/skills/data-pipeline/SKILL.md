@@ -1,5 +1,6 @@
 ---
 name: data-pipeline
+preamble-tier: 3
 description: |
   キヤクアシスト v2 の基準データ取込・RAG パイプライン管理スキル。
   国交省 PDF の取込、Markdown 変換、Vertex AI Search データストア更新を管理。
@@ -83,6 +84,19 @@ pdf-parse v2 の出力特性（`src/domains/ingestion/parsers/pdf-parser.ts` で
 | `mlit_r7_shinkyu.md` | 令和7年改正 新旧対照表 | ~113K chars | Must |
 | `mlit_r7_overview.md` | 改正概要 | ~3K chars | Should |
 | `mlit_r7_procedures.md` | 改正手続留意点 | ~3K chars | Should |
+
+## エスカレーションプロトコル
+
+以下の条件で作業を停止し、ユーザーに報告する:
+
+- **3回の試行失敗**: 同じアプローチを3回試して解決しない場合
+- **セキュリティの不確実性**: 認証、データ漏洩、非弁リスクに関する判断に迷う場合
+- **ドメイン境界の逸脱**: 修正が複数ドメインにまたがり、影響範囲が不明確な場合
+
+報告フォーマット:
+- **REASON**: なぜ停止したか
+- **ATTEMPTED**: 試行した内容（最大3つ）
+- **RECOMMENDATION**: 推奨する次のステップ
 
 ## 完了報告
 

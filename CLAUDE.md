@@ -8,7 +8,7 @@
 ```
 d3m_condo_bylaws_pj/
 ├── CLAUDE.md                  # このファイル（統合プロジェクト設定）
-├── kiyaku-assist-v2/          # Next.js ウェブアプリ（git リポジトリ）
+├── kiyaku-assist-v2/          # Next.js ウェブアプリ
 ├── docs/                      # プロジェクトドキュメント
 │   ├── project_context.md     # マスタードキュメント
 │   ├── prd_kiyaku_assist.md   # PRD v0.2
@@ -19,8 +19,13 @@ d3m_condo_bylaws_pj/
 │   ├── nihon-housing/         # 日本ハウジング規約案・レビュー結果
 │   └── bylaws-drafts/         # 規約改正案 docx
 ├── scripts/                   # ユーティリティスクリプト
+│   ├── gen-skill-docs.sh      # SKILL.md.tmpl → SKILL.md 生成
+│   ├── log-skill-usage.sh     # スキル使用ログ記録
+│   ├── log-contributor-feedback.sh # スキル品質フィードバック記録
+│   ├── fetch_docs.py          # 法律基準データ取得
+│   └── skill-template.md.tmpl # スキル共通テンプレート
 └── .claude/
-    └── skills/                # 9個のカスタムスキル
+    └── skills/                # 16個のカスタムスキル
 ```
 
 ## 技術スタック
@@ -110,6 +115,15 @@ npm run test:ci          # CI 用（JUnit 出力）
 ./scripts/log-skill-usage.sh <skill> <outcome> [duration_s]
 # 例: ./scripts/log-skill-usage.sh deploy success 45
 # ログ: ~/.kiyaku/analytics/skill-usage.jsonl
+
+# Contributor mode（スキル品質フィードバック）
+_CONTRIB=true  # 環境変数でフィードバックモード有効化
+./scripts/log-contributor-feedback.sh <skill> <rating> "<tried>" "<happened>" "<improvement>"
+# ログ: ~/.kiyaku/contributor-logs/
+
+# 法律基準データ取得（要 venv 有効化）
+source venv/bin/activate
+python scripts/fetch_docs.py             # 国交省・法務省データを data/ に取得
 ```
 
 ## 絶対守るべき技術制約
@@ -127,14 +141,21 @@ npm run test:ci          # CI 用（JUnit 出力）
 
 ### ワークフロー系（ユーザー呼び出し可能）
 - `/workflow` — 開発フロー統合（feature/release/review-and-ship）
+- `/office-hours` — 実装前の問題フレーミング（6つの質問で要件を構造化）
 - `/add-feature` — DDD 準拠の機能追加ステップ（型→ドメイン→テスト→API→UI→E2E）
-- `/deploy` — ビルド確認→テスト→push→Firebase 自動デプロイ
+- `/deploy` — ビルド確認→テスト→push→デプロイ後検証（ヘルスチェック付き）
 - `/review-pr` — 6軸レビュー（アーキテクチャ・セキュリティ・アクセシビリティ等）
+- `/design-review` — 実装後の UI/UX 監査（6軸: 一貫性・a11y・レスポンシブ・状態・印刷・日本語）
 - `/run-tests` — テスト実行・診断（gate/unit/e2e/smoke/eval/all）
 - `/data-pipeline` — 基準データ取込・Vertex AI Search データストア更新
+- `/retro` — コミット履歴分析・振り返りレポート生成
+
+### デバッグ系（ユーザー呼び出し可能）
+- `/investigate` — 体系的デバッグ（仮説→検証→エスカレーション）
 
 ### 安全系（参照用）
 - `careful` — 破壊的コマンド（rm -rf, force push 等）の検知・警告
+- `/freeze` — 編集対象を特定ディレクトリに制限する安全ガード
 
 ### 知識系（参照用）
 - `kiyaku-architecture` — DDD + Clean Architecture のルール・Firebase パターン
@@ -156,7 +177,7 @@ npm run test:ci          # CI 用（JUnit 出力）
 
 - **URL**: https://kiyaku-assist--kiyaku-assist.asia-east1.hosted.app
 - **方式**: `git push` → Firebase App Hosting 自動デプロイ
-- **CI**: GitHub Actions（型チェック → lint → unit テスト → カバレッジ）
+- **CI**: GitHub Actions（Gate テスト → unit テスト → カバレッジ）
 - **リソース**: CPU 1, Memory 512 MiB, Max 2 instances, Concurrency 80
 
 ## スキル完了ステータス（共通プロトコル）

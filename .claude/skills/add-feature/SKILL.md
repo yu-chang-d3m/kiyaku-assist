@@ -1,5 +1,6 @@
 ---
 name: add-feature
+preamble-tier: 3
 description: |
   キヤクアシスト v2 への機能追加ワークフロー。
   DDD + Clean Architecture に準拠した実装手順を提供。
@@ -80,6 +81,19 @@ argument-hint: "[追加する機能の説明]"
 
 - [references/checklist.md](references/checklist.md) — 整合性チェックリスト詳細（よくある失敗パターン付き）
 - [references/template-types.md](references/template-types.md) — 型定義テンプレート集
+
+## エスカレーションプロトコル
+
+以下の条件で作業を停止し、ユーザーに報告する:
+
+- **3回の試行失敗**: 同じアプローチを3回試して解決しない場合
+- **セキュリティの不確実性**: 認証、データ漏洩、非弁リスクに関する判断に迷う場合
+- **ドメイン境界の逸脱**: 修正が複数ドメインにまたがり、影響範囲が不明確な場合
+
+報告フォーマット:
+- **REASON**: なぜ停止したか
+- **ATTEMPTED**: 試行した内容（最大3つ）
+- **RECOMMENDATION**: 推奨する次のステップ
 
 ## 完了報告
 

@@ -1,0 +1,81 @@
+#!/bin/bash
+# ==============================================================
+# 開発環境クリーンアップスクリプト
+# ==============================================================
+# node_modules, .next, coverage ディレクトリを削除する
+# ==============================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WEBAPP_DIR="$PROJECT_ROOT/kiyaku-assist-v2"
+
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+info() { echo -e "${GREEN}[REMOVED]${NC} $1"; }
+skip() { echo -e "${YELLOW}[SKIP]${NC} $1 （存在しません）"; }
+
+echo "=============================="
+echo "  規約リノベ 開発環境クリーンアップ"
+echo "=============================="
+echo ""
+
+CLEANED=0
+
+# node_modules
+if [ -d "$WEBAPP_DIR/node_modules" ]; then
+  rm -rf "$WEBAPP_DIR/node_modules"
+  info "kiyaku-assist-v2/node_modules/"
+  CLEANED=$((CLEANED + 1))
+else
+  skip "kiyaku-assist-v2/node_modules/"
+fi
+
+# .next
+if [ -d "$WEBAPP_DIR/.next" ]; then
+  rm -rf "$WEBAPP_DIR/.next"
+  info "kiyaku-assist-v2/.next/"
+  CLEANED=$((CLEANED + 1))
+else
+  skip "kiyaku-assist-v2/.next/"
+fi
+
+# coverage
+if [ -d "$WEBAPP_DIR/coverage" ]; then
+  rm -rf "$WEBAPP_DIR/coverage"
+  info "kiyaku-assist-v2/coverage/"
+  CLEANED=$((CLEANED + 1))
+else
+  skip "kiyaku-assist-v2/coverage/"
+fi
+
+# playwright-report
+if [ -d "$WEBAPP_DIR/playwright-report" ]; then
+  rm -rf "$WEBAPP_DIR/playwright-report"
+  info "kiyaku-assist-v2/playwright-report/"
+  CLEANED=$((CLEANED + 1))
+else
+  skip "kiyaku-assist-v2/playwright-report/"
+fi
+
+# test-results (Playwright)
+if [ -d "$WEBAPP_DIR/test-results" ]; then
+  rm -rf "$WEBAPP_DIR/test-results"
+  info "kiyaku-assist-v2/test-results/"
+  CLEANED=$((CLEANED + 1))
+else
+  skip "kiyaku-assist-v2/test-results/"
+fi
+
+echo ""
+echo "=============================="
+echo "  クリーンアップ完了（${CLEANED} 件削除）"
+echo "=============================="
+echo ""
+if [ "$CLEANED" -gt 0 ]; then
+  echo "  再セットアップ: bin/dev-setup"
+fi
+echo ""

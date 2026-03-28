@@ -14,8 +14,10 @@ import {
   MarkdownGenerator,
   CsvGenerator,
   PdfGenerator,
+  WordGenerator,
 } from "@/domains/export/generators";
 import type { ExportGenerator, ExportOptions } from "@/domains/export/types";
+import type { EnhancedExportOptions } from "@/domains/export/export-types";
 import { logger } from "@/shared/observability/logger";
 import { toExportArticle } from "@/domains/export/presentation";
 
@@ -23,11 +25,11 @@ import { toExportArticle } from "@/domains/export/presentation";
 const exportRequestSchema = z.object({
   projectId: z.string().min(1, "プロジェクトIDは必須です"),
   condoName: z.string().min(1, "マンション名は必須です"),
-  format: z.enum(["markdown", "csv", "pdf"]),
+  format: z.enum(["markdown", "csv", "pdf", "word"]),
   filter: z
     .object({
       decisions: z
-        .array(z.enum(["adopted", "modified", "pending"]).nullable())
+        .array(z.enum(["adopted", "modified", "keep-current", "adopt-management", "pending"]).nullable())
         .optional(),
       importances: z
         .array(z.enum(["mandatory", "recommended", "optional"]))
@@ -36,12 +38,18 @@ const exportRequestSchema = z.object({
     })
     .optional(),
   includeTimestamp: z.boolean(),
+  // Word エクスポート用の拡張オプション
+  includeCoverPage: z.boolean().optional(),
+  includeSummaryTable: z.boolean().optional(),
+  location: z.string().optional(),
+  managementCompany: z.string().optional(),
 });
 
 const generators: Record<ExportOptions["format"], ExportGenerator> = {
   markdown: new MarkdownGenerator(),
   csv: new CsvGenerator(),
   pdf: new PdfGenerator(),
+  word: new WordGenerator() as unknown as ExportGenerator,
 };
 
 export async function POST(request: NextRequest) {
@@ -66,8 +74,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { projectId, condoName, format, filter, includeTimestamp } =
-      parsed.data;
+    const {
+      projectId, condoName, format, filter, includeTimestamp,
+      includeCoverPage, includeSummaryTable, location, managementCompany,
+    } = parsed.data;
 
     logger.info({ projectId, format }, "エクスポート処理を開始");
 
@@ -93,8 +103,21 @@ export async function POST(request: NextRequest) {
     };
 
     // ジェネレーターを選択して実行
-    const generator = generators[format];
-    const result = await generator.generate(exportArticles, options);
+    let result;
+    if (format === "word") {
+      const wordGen = new WordGenerator();
+      const enhancedOpts: EnhancedExportOptions = {
+        ...options,
+        includeCoverPage: includeCoverPage ?? true,
+        includeSummaryTable: includeSummaryTable ?? true,
+        location,
+        managementCompany,
+      };
+      result = await wordGen.generate(exportArticles, enhancedOpts);
+    } else {
+      const generator = generators[format];
+      result = await generator.generate(exportArticles, options);
+    }
 
     logger.info(
       { projectId, format, articleCount: result.articleCount },

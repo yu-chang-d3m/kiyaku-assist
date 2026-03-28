@@ -12,11 +12,12 @@
 import * as z from "zod/v4";
 import { getAdminDb } from "@/shared/db/admin";
 import { FieldValue } from "firebase-admin/firestore";
-import type { Project, ReviewArticle } from "@/shared/db/types";
+import type { Project, ReviewArticle, StandardArticleFirestore } from "@/shared/db/types";
 import {
   ProjectCreateSchema,
   ProjectUpdateSchema,
   ReviewArticleSchema,
+  StandardArticleSchema,
 } from "@/shared/db/schemas";
 
 // ---------- ヘルパー ----------
@@ -347,4 +348,144 @@ export async function batchSaveReviewArticles(
 
     await batch.commit();
   }
+}
+
+// ---------- 標準管理規約条文 CRUD ----------
+
+/** 条文番号をドキュメント ID に変換（全角→半角、スペース除去） */
+function encodeStandardArticleId(articleNum: string): string {
+  return articleNum
+    .replace(/[０-９]/g, (ch) =>
+      String.fromCharCode(ch.charCodeAt(0) - 0xfee0),
+    )
+    .replace(/\s+/g, "");
+}
+
+/**
+ * 標準管理規約条文を一括保存する（全件洗い替え）
+ *
+ * 既存データを全削除してから新規投入する。
+ * Firestore パス: standardArticles/{articleNum}
+ */
+export async function saveStandardArticles(
+  articles: Array<z.infer<typeof StandardArticleSchema>>,
+): Promise<number> {
+  const validated = articles.map((a) => StandardArticleSchema.parse(a));
+
+  const db = getAdminDb();
+  const BATCH_LIMIT = 500;
+
+  // 既存データを全削除
+  const existingSnap = await db.collection("standardArticles").get();
+  if (!existingSnap.empty) {
+    for (let i = 0; i < existingSnap.docs.length; i += BATCH_LIMIT) {
+      const chunk = existingSnap.docs.slice(i, i + BATCH_LIMIT);
+      const batch = db.batch();
+      for (const doc of chunk) batch.delete(doc.ref);
+      await batch.commit();
+    }
+  }
+
+  // 新規投入
+  for (let i = 0; i < validated.length; i += BATCH_LIMIT) {
+    const chunk = validated.slice(i, i + BATCH_LIMIT);
+    const batch = db.batch();
+
+    for (const article of chunk) {
+      const docId = encodeStandardArticleId(article.articleNum);
+      const ref = db.collection("standardArticles").doc(docId);
+      batch.set(ref, {
+        ...article,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
+  }
+
+  return validated.length;
+}
+
+/**
+ * 標準管理規約条文を全件取得する
+ */
+export async function getStandardArticles(): Promise<StandardArticleFirestore[]> {
+  const db = getAdminDb();
+  const snap = await db
+    .collection("standardArticles")
+    .orderBy("chapter")
+    .get();
+
+  return snap.docs.map((d) =>
+    serializeTimestamps({ ...(d.data() as StandardArticleFirestore) }),
+  );
+}
+
+/**
+ * 指定した意味グループの標準管理規約条文を取得する
+ */
+export async function getStandardArticlesByGroup(
+  semanticGroup: string,
+): Promise<StandardArticleFirestore[]> {
+  const db = getAdminDb();
+  const snap = await db
+    .collection("standardArticles")
+    .where("semanticGroup", "==", semanticGroup)
+    .orderBy("chapter")
+    .get();
+
+  return snap.docs.map((d) =>
+    serializeTimestamps({ ...(d.data() as StandardArticleFirestore) }),
+  );
+}
+
+// ---------- 管理会社案 ----------
+
+/**
+ * 管理会社案テキストを ReviewArticle に紐付けて保存
+ *
+ * 既存の ReviewArticle の managementDraft フィールドを更新する。
+ */
+export async function saveManagementDraftToReviewArticles(
+  projectId: string,
+  drafts: Array<{ articleNum: string; managementDraft: string }>,
+): Promise<{ updated: number }> {
+  const db = getAdminDb();
+  const col = db.collection(`projects/${projectId}/reviewArticles`);
+
+  let updated = 0;
+  const BATCH_LIMIT = 500;
+
+  for (let i = 0; i < drafts.length; i += BATCH_LIMIT) {
+    const batch = db.batch();
+    const chunk = drafts.slice(i, i + BATCH_LIMIT);
+
+    for (const d of chunk) {
+      // articleNum で既存ドキュメントを検索
+      const snap = await col
+        .where("articleNum", "==", d.articleNum)
+        .limit(1)
+        .get();
+
+      if (!snap.empty) {
+        batch.update(snap.docs[0].ref, {
+          managementDraft: d.managementDraft,
+          updatedAt: new Date().toISOString(),
+        });
+        updated++;
+      }
+    }
+
+    await batch.commit();
+  }
+
+  // プロジェクトの hasManagementDraft フラグを更新
+  if (updated > 0) {
+    await db.doc(`projects/${projectId}`).update({
+      hasManagementDraft: true,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  return { updated };
 }

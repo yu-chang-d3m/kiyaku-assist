@@ -21,7 +21,7 @@ interface ProjectState {
   /** ギャップ分析結果 */
   gapResults: GapAnalysisItem[] | null;
   /** ユーザーの決定（条番号 → 決定状態） */
-  reviewDecisions: Record<string, "adopted" | "modified" | "pending" | null> | null;
+  reviewDecisions: Record<string, "adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null> | null;
   /** ユーザーメモ（条番号 → メモ） */
   reviewMemos: Record<string, string> | null;
   /** レビュー記事一覧 */
@@ -34,7 +34,7 @@ interface ProjectState {
   // アクション
   setParsedBylaws: (result: ParseResult) => void;
   setGapResults: (results: GapAnalysisItem[]) => void;
-  setReviewDecisions: (decisions: Record<string, "adopted" | "modified" | "pending" | null>) => void;
+  setReviewDecisions: (decisions: Record<string, "adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null>) => void;
   setReviewMemos: (memos: Record<string, string>) => void;
   setReviewArticles: (articles: ReviewArticle[]) => void;
   setOnboarding: (data: Record<string, string>) => void;
@@ -102,10 +102,10 @@ export const saveGapResults = (results: GapAnalysisItem[]) =>
 export const loadGapResults = (): GapAnalysisItem[] | null =>
   useProjectStore.getState().gapResults;
 
-export const saveReviewDecisions = (decisions: Record<string, "adopted" | "modified" | "pending" | null>) =>
+export const saveReviewDecisions = (decisions: Record<string, "adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null>) =>
   useProjectStore.getState().setReviewDecisions(decisions);
 
-export const loadReviewDecisions = (): Record<string, "adopted" | "modified" | "pending" | null> | null =>
+export const loadReviewDecisions = (): Record<string, "adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null> | null =>
   useProjectStore.getState().reviewDecisions;
 
 export const saveReviewMemos = (memos: Record<string, string>) =>

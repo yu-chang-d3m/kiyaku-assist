@@ -30,6 +30,18 @@ export const ProjectUpdateSchema = z.object({
   currentStep: z.number().int().min(0).max(5).optional(),
 });
 
+/** 標準管理規約条文スキーマ */
+export const StandardArticleSchema = z.object({
+  articleNum: z.string().min(1),
+  title: z.string(),
+  body: z.string().min(1),
+  chapter: z.number().int().min(0),
+  chapterTitle: z.string().min(1),
+  comment: z.string(),
+  semanticGroup: z.string().min(1),
+  secondaryGroups: z.array(z.string()),
+});
+
 /** レビュー記事スキーマ */
 export const ReviewArticleSchema = z.object({
   projectId: z.string().min(1),
@@ -41,7 +53,7 @@ export const ReviewArticleSchema = z.object({
   explanation: z.string(),
   importance: z.enum(["mandatory", "recommended", "optional"]),
   baseRef: z.string(),
-  decision: z.enum(["adopted", "modified", "pending"]).nullable(),
+  decision: z.enum(["adopted", "modified", "keep-current", "adopt-management", "pending"]).nullable(),
   modificationHistory: z.array(z.string()),
   memo: z.string().default(""),
   category: z.string(),
@@ -52,5 +64,12 @@ export const ReviewArticleSchema = z.object({
   riskIfUnchanged: z.string().optional(),
   transitionalMeasure: z.string().optional(),
   standardRuleComparison: z.string().optional(),
+  reformText: z.string().optional(),
+  semanticGroup: z.string().optional(),
+  secondaryGroups: z.array(z.string()).optional(),
+  standardArticleNum: z.string().optional(),
+  detailedBackground: z.string().optional(),
+  issueGroup: z.string().optional(),
+  managementDraft: z.string().nullable().optional(),
   updatedAt: z.string().optional(),
 });

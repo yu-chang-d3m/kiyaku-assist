@@ -31,6 +31,14 @@ export interface Project {
   documentType?: "management-rules" | "usage-rules" | "other-bylaws";
   /** 現在のステップ番号 */
   currentStep: number;
+  /** 管理会社案がインポート済みか */
+  hasManagementDraft?: boolean;
+  /** 築年数（表紙・エクスポート用） */
+  buildingAge?: number;
+  /** 所在地（表紙・エクスポート用） */
+  location?: string;
+  /** 管理会社名（表紙・エクスポート用） */
+  managementCompany?: string;
   /** 作成日時（ISO 文字列） */
   createdAt: string;
   /** 更新日時（ISO 文字列） */
@@ -65,7 +73,7 @@ export interface ReviewArticle {
   /** 準拠する標準管理規約等の参照先 */
   baseRef: string;
   /** ユーザーの決定 */
-  decision: "adopted" | "modified" | "pending" | null;
+  decision: "adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null;
   /** 修正履歴 */
   modificationHistory: string[];
   /** ユーザーメモ */
@@ -86,6 +94,27 @@ export interface ReviewArticle {
   transitionalMeasure?: string;
   /** 標準管理規約との対比説明 */
   standardRuleComparison?: string;
+
+  // --- Phase 1 追加（意味分類 + 改正案生成） ---
+
+  /** 改正案テキスト（このマンション用にカスタマイズされた条文） */
+  reformText?: string;
+  /** プライマリ意味グループ */
+  semanticGroup?: string;
+  /** セカンダリ意味グループ */
+  secondaryGroups?: string[];
+  /** 対応する標準条文番号 */
+  standardArticleNum?: string;
+  /** 詳細な改正背景 */
+  detailedBackground?: string;
+  /** 課題グループ */
+  issueGroup?: string;
+
+  // --- Phase 3 追加（管理会社案） ---
+
+  /** 管理会社案テキスト（null = なし） */
+  managementDraft?: string | null;
+
   /** 更新日時（Firestore サーバータイムスタンプ） */
   updatedAt?: string;
 }
@@ -108,6 +137,36 @@ export interface CachedResponse {
   createdAt: string | unknown;
   /** 有効期限（ISO 文字列 or Timestamp） */
   expiresAt: string | unknown;
+}
+
+// ---------- 標準管理規約条文 ----------
+
+/**
+ * パース済み国交省標準管理規約の条文（Firestore 格納用）
+ * Firestore パス: standardArticles/{articleNum}
+ *
+ * プロジェクトに依存しないグローバルコレクション。
+ * seed-standard API で初期投入する。
+ */
+export interface StandardArticleFirestore {
+  /** 条文番号（例: "第1条"）— ドキュメント ID としても使用 */
+  articleNum: string;
+  /** 条文タイトル（例: "目的"） */
+  title: string;
+  /** 条文本文（項・号を含む全テキスト） */
+  body: string;
+  /** 章番号 */
+  chapter: number;
+  /** 章名（例: "総則"） */
+  chapterTitle: string;
+  /** コメント（解説テキスト） */
+  comment: string;
+  /** プライマリ意味グループ */
+  semanticGroup: string;
+  /** セカンダリ意味グループ */
+  secondaryGroups: string[];
+  /** 作成日時（ISO 文字列 or Timestamp） */
+  createdAt: string | unknown;
 }
 
 // ---------- ユーティリティ型 ----------

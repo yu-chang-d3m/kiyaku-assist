@@ -38,6 +38,18 @@ export function applyEvent(
         decision: "adopted",
       };
 
+    case "KEEP_CURRENT":
+      return {
+        ...state,
+        decision: "keep-current",
+      };
+
+    case "ADOPT_MANAGEMENT":
+      return {
+        ...state,
+        decision: "adopt-management",
+      };
+
     case "MODIFY": {
       const entry: ModificationEntry = {
         before: state.currentDraft,
@@ -102,8 +114,13 @@ export function isValidTransition(
   // pending からはどの状態にも遷移可能
   if (currentDecision === "pending") return true;
 
-  // adopted/modified からは pending（リセット）にのみ遷移可能
-  if (currentDecision === "adopted" || currentDecision === "modified") {
+  // adopted/modified/keep-current からは pending（リセット）にのみ遷移可能
+  if (
+    currentDecision === "adopted" ||
+    currentDecision === "modified" ||
+    currentDecision === "keep-current" ||
+    currentDecision === "adopt-management"
+  ) {
     return targetDecision === "pending" || targetDecision === null;
   }
 
@@ -122,6 +139,7 @@ export function calculateProgress(states: ReviewArticleState[]): ReviewProgress 
   const total = states.length;
   let adopted = 0;
   let modified = 0;
+  let keepCurrent = 0;
   let pending = 0;
   let undecided = 0;
 
@@ -133,6 +151,12 @@ export function calculateProgress(states: ReviewArticleState[]): ReviewProgress 
       case "modified":
         modified++;
         break;
+      case "keep-current":
+        keepCurrent++;
+        break;
+      case "adopt-management":
+        adopted++; // adopt-management は adopted と同等にカウント
+        break;
       case "pending":
         pending++;
         break;
@@ -142,13 +166,14 @@ export function calculateProgress(states: ReviewArticleState[]): ReviewProgress 
     }
   }
 
-  const decided = adopted + modified;
+  const decided = adopted + modified + keepCurrent;
   const progressPercent = total > 0 ? Math.round((decided / total) * 100) : 0;
 
   return {
     total,
     adopted,
     modified,
+    keepCurrent,
     pending,
     undecided,
     progressPercent,

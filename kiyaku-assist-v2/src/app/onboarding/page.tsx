@@ -32,9 +32,11 @@ interface OnboardingQuestion {
   id: string;
   question: string;
   description: string;
-  type: "select" | "text";
+  type: "select" | "text" | "number";
   options?: readonly { value: string; label: string }[];
   placeholder?: string;
+  /** true の場合、回答なしで次へ進める */
+  optional?: boolean;
 }
 
 const ONBOARDING_QUESTIONS: readonly OnboardingQuestion[] = [
@@ -106,6 +108,33 @@ const ONBOARDING_QUESTIONS: readonly OnboardingQuestion[] = [
       { value: "undecided", label: "まだ決めていない" },
     ],
   },
+  {
+    id: "location",
+    question: "マンションの所在地は？（任意）",
+    description:
+      "エクスポート文書の表紙に記載されます。入力しなくても問題ありません。",
+    type: "text",
+    placeholder: "例: 東京都渋谷区○○1-2-3",
+    optional: true,
+  },
+  {
+    id: "managementCompany",
+    question: "管理会社名は？（任意）",
+    description:
+      "管理会社の規約案がある場合に、文書に記載されます。",
+    type: "text",
+    placeholder: "例: 日本ハウジング",
+    optional: true,
+  },
+  {
+    id: "buildingAge",
+    question: "築年数は？（任意）",
+    description:
+      "築年数に応じた分析の参考情報として使用します。",
+    type: "number",
+    placeholder: "例: 15",
+    optional: true,
+  },
 ] as const;
 
 type Answers = Record<string, string>;
@@ -133,7 +162,11 @@ function OnboardingPageContent() {
   const isLast = currentQ === totalQ - 1;
   const selectedValue = answers[question.id] ?? "";
   const progressPercent = ((currentQ + 1) / totalQ) * 100;
-  const canProceed = question.type === "text" ? selectedValue.trim().length > 0 : Boolean(selectedValue);
+  const canProceed = question.optional
+    ? true
+    : question.type === "text" || question.type === "number"
+      ? selectedValue.trim().length > 0
+      : Boolean(selectedValue);
 
   /** 選択肢をクリックしたとき */
   function handleSelect(value: string) {
@@ -165,6 +198,9 @@ function OnboardingPageContent() {
           hasCurrentRules: answers.hasCurrentRules === "yes",
           documentType: (answers.documentType ?? "management-rules") as "management-rules" | "usage-rules" | "other-bylaws",
           currentStep: 0,
+          ...(answers.location ? { location: answers.location } : {}),
+          ...(answers.managementCompany ? { managementCompany: answers.managementCompany } : {}),
+          ...(answers.buildingAge ? { buildingAge: parseInt(answers.buildingAge, 10) } : {}),
         });
 
         // projectId をセッションに保存
@@ -237,6 +273,23 @@ function OnboardingPageContent() {
               />
             )}
 
+            {/* 数値入力 */}
+            {question.type === "number" && (
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={selectedValue}
+                onChange={(e) => handleTextChange(e.target.value)}
+                placeholder={question.placeholder}
+                data-test={`onboarding-input-${question.id}`}
+                className="w-full px-4 py-3 rounded-lg border text-base focus:outline-none focus:ring-2 focus:ring-primary/50"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && canProceed) handleNext();
+                }}
+              />
+            )}
+
             {/* 選択肢 */}
             {question.type === "select" && question.options?.map((option) => (
               <button
@@ -290,7 +343,7 @@ function OnboardingPageContent() {
                 className="flex-1"
                 data-test="onboarding-next"
               >
-                {submitting ? "作成中..." : isLast ? "始める" : "次へ"}
+                {submitting ? "作成中..." : isLast ? "始める" : question.optional && !selectedValue ? "スキップ" : "次へ"}
               </Button>
             </div>
           </CardContent>

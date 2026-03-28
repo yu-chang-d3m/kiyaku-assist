@@ -23,7 +23,7 @@ export interface ExportArticle {
   /** 重要度 */
   importance: "mandatory" | "recommended" | "optional";
   /** ユーザーの決定 */
-  decision: "adopted" | "modified" | "pending" | null;
+  decision: "adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null;
   /** 準拠する標準管理規約等の参照先 */
   baseRef: string;
   /** 改正区分所有法との関連条文 */
@@ -43,7 +43,7 @@ export interface ExportOptions {
   /** マンション名 */
   condoName: string;
   /** 出力フォーマット */
-  format: "markdown" | "csv" | "pdf";
+  format: "markdown" | "csv" | "pdf" | "word";
   /** 対象条文のフィルタ（未指定で全件） */
   filter?: ExportFilter;
   /** 生成日時を含めるか */
@@ -53,7 +53,7 @@ export interface ExportOptions {
 /** エクスポートフィルタ */
 export interface ExportFilter {
   /** 決定状態でフィルタ */
-  decisions?: Array<"adopted" | "modified" | "pending" | null>;
+  decisions?: Array<"adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null>;
   /** 重要度でフィルタ */
   importances?: Array<"mandatory" | "recommended" | "optional">;
   /** 章番号でフィルタ */

@@ -1,5 +1,6 @@
 import type { ExportArticle, ExportFilter } from "@/domains/export/types";
 import type { ReviewArticle } from "@/shared/db/types";
+import { SEMANTIC_GROUPS, SEMANTIC_GROUP_LABELS } from "@/domains/taxonomy/constants";
 
 export const IMPORTANCE_LABELS: Record<string, string> = {
   mandatory: "必須",
@@ -10,6 +11,8 @@ export const IMPORTANCE_LABELS: Record<string, string> = {
 export const DECISION_LABELS: Record<string, string> = {
   adopted: "採用",
   modified: "修正採用",
+  "keep-current": "現行維持",
+  "adopt-management": "管理会社案採用",
   pending: "保留",
 };
 
@@ -108,3 +111,51 @@ export function getDecisionLabel(
   if (!decision) return "未決定";
   return DECISION_LABELS[decision] ?? decision;
 }
+
+// ---------- 意味グループ別エクスポート ----------
+
+export interface ExportSemanticGroup {
+  groupId: string;
+  groupLabel: string;
+  priority: number;
+  articles: ExportArticle[];
+}
+
+/** 意味グループ別にエクスポート条文をグルーピング */
+export function groupExportArticlesBySemanticGroup(
+  articles: ExportArticle[],
+): ExportSemanticGroup[] {
+  const groupMap = new Map<string, ExportArticle[]>();
+
+  for (const article of articles) {
+    const gid = (article as ExportArticle & { semanticGroup?: string }).semanticGroup ?? "misc";
+    const existing = groupMap.get(gid) ?? [];
+    existing.push(article);
+    groupMap.set(gid, existing);
+  }
+
+  return SEMANTIC_GROUPS
+    .filter((g) => groupMap.has(g.id))
+    .map((g) => ({
+      groupId: g.id,
+      groupLabel: g.label,
+      priority: g.priority,
+      articles: groupMap.get(g.id) ?? [],
+    }));
+}
+
+/** 重要度別にエクスポート条文をグルーピング */
+export function groupExportArticlesByPriority(
+  articles: ExportArticle[],
+): { importance: string; label: string; articles: ExportArticle[] }[] {
+  const order = ["mandatory", "recommended", "optional"] as const;
+  return order
+    .map((imp) => ({
+      importance: imp,
+      label: IMPORTANCE_LABELS[imp] ?? imp,
+      articles: articles.filter((a) => a.importance === imp),
+    }))
+    .filter((g) => g.articles.length > 0);
+}
+
+export { SEMANTIC_GROUP_LABELS };

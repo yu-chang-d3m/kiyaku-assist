@@ -26,6 +26,19 @@ export interface GapAnalysisItem {
   rationale: string;
   /** 改正区分所有法との関連条文 */
   relatedLawRefs: string[];
+
+  // --- Phase 1 追加（意味分類統合） ---
+
+  /** プライマリ意味グループ */
+  semanticGroup?: string;
+  /** セカンダリ意味グループ */
+  secondaryGroups?: string[];
+  /** 対応する標準条文番号（例: "第1条"） */
+  standardArticleNum?: string;
+  /** 詳細な改正背景（法改正の経緯、実務上の課題） */
+  detailedBackground?: string;
+  /** 課題グループ（同じ改正テーマに属する条文のグルーピングキー） */
+  issueGroup?: string;
 }
 
 /** ギャップの種類 */

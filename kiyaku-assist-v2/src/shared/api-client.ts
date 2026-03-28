@@ -218,6 +218,83 @@ export function startAnalysis(
   return controller;
 }
 
+/** Unified Analysis SSE のコールバック */
+interface UnifiedAnalysisCallbacks {
+  onProgress?: (data: {
+    phase: string;
+    current: number;
+    total: number;
+    message: string;
+  }) => void;
+  onComplete?: (data: AnalysisResult & { reformGenerated: number }) => void;
+  onError?: (message: string) => void;
+}
+
+/**
+ * POST /api/analysis/unified-start (SSE)
+ * 統合分析（意味分類 → ギャップ分析 → 改正案生成）を開始する
+ */
+export function startUnifiedAnalysis(
+  projectId: string,
+  articles: Array<{
+    articleNum: string;
+    category: string;
+    currentText: string | null;
+  }>,
+  callbacks: UnifiedAnalysisCallbacks,
+): AbortController {
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      const res = await fetch("/api/analysis/unified-start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, articles }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        if (res.status === 404) clearSession();
+        const err = await res.json().catch(() => ({}));
+        callbacks.onError?.(
+          (err as { error?: string }).error ?? "統合分析の開始に失敗しました",
+        );
+        return;
+      }
+
+      const terminated = await consumeSSE(res, {
+        progress: (data) => {
+          callbacks.onProgress?.(
+            data as { phase: string; current: number; total: number; message: string },
+          );
+        },
+        complete: (data) => {
+          callbacks.onComplete?.(data as AnalysisResult & { reformGenerated: number });
+        },
+        error: (data) => {
+          callbacks.onError?.((data as { message: string }).message);
+        },
+      });
+
+      if (!terminated) {
+        callbacks.onError?.(
+          "サーバーとの接続が切れました。ページを再読み込みしてください。",
+        );
+      }
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      callbacks.onError?.(
+        err instanceof Error
+          ? err.message
+          : "統合分析中に通信エラーが発生しました",
+      );
+    }
+  })();
+
+  return controller;
+}
+
 /**
  * GET /api/analysis/[projectId]
  * プロジェクトの分析結果（レビュー記事一覧）を取得する
@@ -514,7 +591,7 @@ export function streamChat(
 export interface ExportRequest {
   projectId: string;
   condoName: string;
-  format: "markdown" | "csv" | "pdf";
+  format: "markdown" | "csv" | "pdf" | "word";
   filter?: {
     decisions?: Array<"adopted" | "modified" | "pending" | null>;
     importances?: Array<"mandatory" | "recommended" | "optional">;
@@ -549,6 +626,9 @@ export interface ProjectCreate {
   hasCurrentRules: boolean;
   documentType?: "management-rules" | "usage-rules" | "other-bylaws";
   currentStep: number;
+  buildingAge?: number;
+  location?: string;
+  managementCompany?: string;
 }
 
 /**
@@ -787,4 +867,76 @@ export async function clearAllData(): Promise<{
   const res = await fetch("/api/admin/clear-data", { method: "DELETE" });
   if (!res.ok) await handleResponseError(res, "全データの削除に失敗しました");
   return res.json();
+}
+
+// ---------- 管理会社案 ----------
+
+export interface ManagementDraftParseCallbacks {
+  onProgress?: (data: { phase: string; current: number; total: number; message: string }) => void;
+  onComplete?: (data: { totalParsed: number; matched: number; saved: number; warnings: string[] }) => void;
+  onError?: (message: string) => void;
+}
+
+/**
+ * 管理会社案をパースして ReviewArticle に紐付け
+ */
+export function parseManagementDraft(
+  projectId: string,
+  input: { text: string } | { file: File },
+  callbacks: ManagementDraftParseCallbacks,
+): AbortController {
+  const controller = new AbortController();
+  const formData = new FormData();
+  formData.append("projectId", projectId);
+
+  if ("text" in input) {
+    formData.append("text", input.text);
+  } else {
+    formData.append("file", input.file);
+  }
+
+  fetch("/api/ingestion/parse-management-draft", {
+    method: "POST",
+    body: formData,
+    signal: controller.signal,
+  })
+    .then(async (res) => {
+      if (!res.ok || !res.body) {
+        const errorText = await res.text();
+        callbacks.onError?.(errorText || "管理会社案パースに失敗しました");
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.type === "progress") callbacks.onProgress?.(data);
+            else if (data.type === "complete") callbacks.onComplete?.(data);
+            else if (data.type === "error") callbacks.onError?.(data.message);
+          } catch {
+            // SSE パース失敗は無視
+          }
+        }
+      }
+    })
+    .catch((err) => {
+      if (err.name !== "AbortError") {
+        callbacks.onError?.(err instanceof Error ? err.message : "不明なエラー");
+      }
+    });
+
+  return controller;
 }

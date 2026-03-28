@@ -99,7 +99,7 @@ interface ExportFormat {
   title: string;
   description: string;
   icon: string;
-  format: "markdown" | "csv" | "pdf";
+  format: "markdown" | "csv" | "pdf" | "word";
   actionLabel: string;
 }
 
@@ -134,6 +134,15 @@ const EXPORT_FORMATS: ExportFormat[] = [
     format: "pdf",
     actionLabel: "PDF ダウンロード",
   },
+  {
+    id: "word",
+    title: "Word（新旧対照表）",
+    description:
+      "表紙・サマリー・新旧対照表を含む Word ファイルをダウンロードします。理事会への配布・編集用に最適です。",
+    icon: "W",
+    format: "word",
+    actionLabel: "Word ダウンロード",
+  },
 ];
 
 // ---------- ユーティリティ ----------
@@ -160,7 +169,7 @@ function ExportPageContent() {
   const [articles, setArticles] = useState<ReviewArticle[]>([]);
   const [condoName, setCondoName] = useState("マンション");
   const [progress, setProgress] = useState<ReviewProgress | null>(null);
-  const [decisions, setDecisions] = useState<Record<string, "adopted" | "modified" | "pending" | null>>({});
+  const [decisions, setDecisions] = useState<Record<string, "adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null>>({});
   const [phase, setPhase] = useState<"loading" | "no-data" | "ready">(
     "loading"
   );
@@ -227,7 +236,7 @@ function ExportPageContent() {
           setDecisions(savedDecisions);
         } else {
           // API の decision を初期値として使用
-          const d: Record<string, "adopted" | "modified" | "pending" | null> = {};
+          const d: Record<string, "adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null> = {};
           for (const a of articlesRes.articles) {
             if (a.id && a.decision) d[a.id] = a.decision;
           }
@@ -272,8 +281,8 @@ function ExportPageContent() {
       });
 
       const date = new Date().toISOString().split("T")[0];
-      const ext =
-        fmt.format === "csv" ? "csv" : fmt.format === "pdf" ? "pdf" : "md";
+      const extMap: Record<string, string> = { csv: "csv", pdf: "pdf", word: "docx", markdown: "md" };
+      const ext = extMap[fmt.format] ?? "md";
       const filename = `管理規約_${fmt.format === "csv" ? "レビュー結果" : "新旧対照表"}_${date}.${ext}`;
 
       downloadBlob(blob, filename);

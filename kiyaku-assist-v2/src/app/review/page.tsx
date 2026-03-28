@@ -19,19 +19,28 @@ import type { GapAnalysisItem } from "@/domains/analysis/types";
 import { useProjectStore, loadProjectId, loadGapResults, saveReviewDecisions, loadReviewDecisions, saveReviewMemos, loadReviewMemos, loadOnboarding } from "@/shared/store";
 import { AuthGuard } from "@/shared/auth/auth-guard";
 import { ArticleDiffView } from "@/components/diff/article-diff-view";
+import { SemanticNavigator } from "@/components/review/semantic-navigator";
+import { PriorityDashboard } from "@/components/review/priority-dashboard";
+import { TwoColumnView } from "@/components/review/two-column-view";
+import { ThreeColumnView } from "@/components/review/three-column-view";
+import { ArticleDecisionPanel } from "@/components/review/article-decision-panel";
+import { CrossRefPanel } from "@/components/review/crossref-panel";
+import { buildCrossRefGraph } from "@/domains/crossref/detector";
 
 // ---------- 定数・ユーティリティ ----------
 const IMPORTANCE_LABEL: Record<string, string> = { mandatory: "法的必須", recommended: "推奨", optional: "任意" };
 const IMPORTANCE_STYLE: Record<string, string> = { mandatory: "bg-red-500 text-white", recommended: "bg-blue-500 text-white", optional: "bg-gray-400 text-white" };
 const IMPORTANCE_ORDER: Record<string, number> = { mandatory: 0, recommended: 1, optional: 2 };
 
-type Decision = "adopted" | "modified" | "pending";
-type FilterType = "all" | "undecided" | "adopted" | "modified" | "pending";
+type Decision = "adopted" | "modified" | "keep-current" | "adopt-management" | "pending";
+type FilterType = "all" | "undecided" | "adopted" | "modified" | "keep-current" | "pending";
 type ImportanceFilter = "all" | "mandatory" | "recommended" | "optional";
+type ViewMode = "table" | "dashboard";
 
 const FILTER_OPTIONS: { value: FilterType; label: string }[] = [
   { value: "all", label: "全て" }, { value: "undecided", label: "未決定" },
-  { value: "adopted", label: "採用" }, { value: "modified", label: "修正" }, { value: "pending", label: "保留" },
+  { value: "adopted", label: "採用" }, { value: "keep-current", label: "現行維持" },
+  { value: "modified", label: "修正" }, { value: "pending", label: "保留" },
 ];
 const IMPORTANCE_FILTER_OPTIONS: { value: ImportanceFilter; label: string }[] = [
   { value: "all", label: "全重要度" }, { value: "mandatory", label: "法的必須" },
@@ -54,10 +63,11 @@ function extractNum(s: string): number {
 }
 /** ReviewEvent を構築 */
 function buildEvent(decision: Decision, draft?: string) {
-  return {
-    type: decision === "adopted" ? "ADOPT" : decision === "modified" ? "MODIFY" as const : "RESET" as const,
-    ...(decision === "modified" ? { newText: draft ?? "", reason: "レビュー画面で修正" } : {}),
-  } as import("@/domains/review/types").ReviewEvent;
+  if (decision === "adopted") return { type: "ADOPT" as const };
+  if (decision === "keep-current") return { type: "KEEP_CURRENT" as const };
+  if (decision === "adopt-management") return { type: "ADOPT_MANAGEMENT" as const };
+  if (decision === "modified") return { type: "MODIFY" as const, newText: draft ?? "", reason: "レビュー画面で修正" };
+  return { type: "RESET" as const };
 }
 
 // スピナー SVG（再利用）
@@ -88,6 +98,8 @@ function ReviewPageContent() {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [draftLoading, setDraftLoading] = useState<Record<string, boolean>>({});
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
   const [batchDraftPhase, setBatchDraftPhase] = useState<"idle" | "generating" | "done" | "error">("idle");
@@ -180,8 +192,10 @@ function ReviewPageContent() {
       if (filter !== "all" && filter !== "undecided" && decisions[aid] !== filter) return false;
       if (importanceFilter !== "all" && a.importance !== importanceFilter) return false;
       if (categoryFilter !== "all" && a.category !== categoryFilter) return false;
+      // 意味グループフィルタ
+      if (selectedGroup !== null && a.semanticGroup !== selectedGroup) return false;
       return true;
-    }), [sortedArticles, filter, importanceFilter, categoryFilter, decisions]);
+    }), [sortedArticles, filter, importanceFilter, categoryFilter, selectedGroup, decisions]);
 
   // 統計
   const decided = Object.values(decisions).filter(Boolean).length;
@@ -190,6 +204,16 @@ function ReviewPageContent() {
   for (const a of articles) counts[a.importance]++;
   const allDone = articles.length > 0 && decided === articles.length;
   const selectedArticle = selectedId ? articles.find((a) => a.id === selectedId) ?? null : null;
+
+  // 相互参照グラフ
+  const crossRefGraph = useMemo(() => {
+    if (articles.length === 0) return null;
+    const graphArticles = articles.map((a) => ({
+      articleNum: a.articleNum,
+      text: a.draft || a.original || "",
+    }));
+    return buildCrossRefGraph(graphArticles);
+  }, [articles]);
 
   // ---------- ハンドラ ----------
   async function handleDecision(article: ReviewArticle, decision: Decision) {
@@ -413,6 +437,8 @@ function ReviewPageContent() {
   function decisionBadge(aid: string) {
     const d = decisions[aid];
     if (d === "adopted") return <Badge className="bg-green-500 text-white text-sm">採用</Badge>;
+    if (d === "keep-current") return <Badge className="bg-gray-100 text-gray-800 border-gray-300 text-sm">現行維持</Badge>;
+    if (d === "adopt-management") return <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-sm">管理会社案</Badge>;
     if (d === "modified") return <Badge className="bg-yellow-500 text-white text-sm">修正</Badge>;
     if (d === "pending") return <Badge className="bg-gray-400 text-white text-sm">保留</Badge>;
     return null;
@@ -422,11 +448,44 @@ function ReviewPageContent() {
   return (
     <div className="flex flex-col min-h-screen">
       <AppHeader currentStep={"review" as StepId} />
-      <main className="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
-        {/* ヘッダー */}
-        <div className="mb-4">
-          <Badge variant="secondary" className="mb-2">ステップ 5 / 6</Badge>
-          <h2 className="text-xl font-bold">改正案レビュー</h2>
+      <div className="flex-1 flex">
+        {/* 左サイドバー: 意味グループナビゲーション（デスクトップのみ） */}
+        <aside className="hidden lg:block w-64 shrink-0 border-r bg-muted/20 p-3 overflow-y-auto">
+          <SemanticNavigator
+            articles={articles}
+            selectedArticleNum={selectedArticle?.articleNum}
+            onArticleClick={(articleNum) => {
+              const a = articles.find((art) => art.articleNum === articleNum);
+              if (a?.id) setSelectedId(a.id);
+            }}
+            selectedGroup={selectedGroup}
+            onGroupSelect={setSelectedGroup}
+          />
+        </aside>
+
+        <main className="flex-1 max-w-6xl mx-auto px-4 py-8 w-full overflow-y-auto">
+        {/* ヘッダー + ビューモード切替 */}
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <Badge variant="secondary" className="mb-2">ステップ 5 / 6</Badge>
+            <h2 className="text-xl font-bold">改正案レビュー</h2>
+          </div>
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant={viewMode === "table" ? "default" : "outline"}
+              onClick={() => setViewMode("table")}
+            >
+              一覧
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === "dashboard" ? "default" : "outline"}
+              onClick={() => setViewMode("dashboard")}
+            >
+              ダッシュボード
+            </Button>
+          </div>
         </div>
 
         {/* サマリーバー */}
@@ -446,6 +505,19 @@ function ReviewPageContent() {
           </CardContent>
         </Card>
 
+        {/* ダッシュボードモード */}
+        {viewMode === "dashboard" && (
+          <PriorityDashboard
+            articles={articles}
+            onGroupClick={(groupId) => {
+              setSelectedGroup(groupId);
+              setViewMode("table");
+            }}
+          />
+        )}
+
+        {/* 一覧モード */}
+        {viewMode === "table" && (<>
         {/* フィルタバー */}
         <div className="flex flex-wrap items-center gap-2 mb-2">
           {FILTER_OPTIONS.map((o) => (
@@ -593,19 +665,45 @@ function ReviewPageContent() {
                 <p className="text-sm font-medium mb-1">何が変わる？</p>
                 <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.summary}</p>
               </div>
-              {/* 新旧対照（差分表示 + 現行 + 改定案の3タブ） */}
-              <ArticleDiffView
-                original={selectedArticle.original}
-                draft={currentDraftText}
-                onDraftEdit={handleDraftEdit}
-                onDraftSave={handleDraftSave}
-                isDraftEdited={isDraftEdited}
-                onGenerateDraft={handleGenerateDraft}
-                isDraftLoading={isDraftLoading}
-                draftError={draftError}
-                baseRef={selectedArticle.baseRef}
-                hasDraft={!!selectedArticle.draft}
-              />
+              {/* 比較ビュー: 管理会社案あり→3カラム、改正案のみ→2カラム、なし→従来 */}
+              {selectedArticle.reformText && selectedArticle.managementDraft ? (
+                <ThreeColumnView
+                  original={selectedArticle.original}
+                  managementDraft={selectedArticle.managementDraft}
+                  reformText={selectedArticle.reformText}
+                  semanticGroup={selectedArticle.semanticGroup}
+                  issueGroup={selectedArticle.issueGroup}
+                  detailedBackground={selectedArticle.detailedBackground}
+                  impactOnResidents={selectedArticle.impactOnResidents}
+                  riskIfUnchanged={selectedArticle.riskIfUnchanged}
+                  transitionalMeasure={selectedArticle.transitionalMeasure}
+                />
+              ) : selectedArticle.reformText ? (
+                <TwoColumnView
+                  original={selectedArticle.original}
+                  reformText={selectedArticle.reformText}
+                  semanticGroup={selectedArticle.semanticGroup}
+                  issueGroup={selectedArticle.issueGroup}
+                  detailedBackground={selectedArticle.detailedBackground}
+                  impactOnResidents={selectedArticle.impactOnResidents}
+                  riskIfUnchanged={selectedArticle.riskIfUnchanged}
+                  transitionalMeasure={selectedArticle.transitionalMeasure}
+                />
+              ) : (
+                /* フォールバック: 従来の差分ビュー */
+                <ArticleDiffView
+                  original={selectedArticle.original}
+                  draft={currentDraftText}
+                  onDraftEdit={handleDraftEdit}
+                  onDraftSave={handleDraftSave}
+                  isDraftEdited={isDraftEdited}
+                  onGenerateDraft={handleGenerateDraft}
+                  isDraftLoading={isDraftLoading}
+                  draftError={draftError}
+                  baseRef={selectedArticle.baseRef}
+                  hasDraft={!!selectedArticle.draft}
+                />
+              )}
               {/* 変更理由・解説 */}
               {selectedArticle.explanation && (
                 <div>
@@ -615,8 +713,8 @@ function ReviewPageContent() {
                   </div>
                 </div>
               )}
-              {/* 判断支援情報 */}
-              {(selectedArticle.impactOnResidents || selectedArticle.riskIfUnchanged || selectedArticle.transitionalMeasure || selectedArticle.standardRuleComparison || (selectedArticle.relatedLawRefs && selectedArticle.relatedLawRefs.length > 0)) && (
+              {/* 判断支援情報（TwoColumnView に含まれない場合のフォールバック） */}
+              {!selectedArticle.reformText && (selectedArticle.impactOnResidents || selectedArticle.riskIfUnchanged || selectedArticle.transitionalMeasure || selectedArticle.standardRuleComparison || (selectedArticle.relatedLawRefs && selectedArticle.relatedLawRefs.length > 0)) && (
                 <div className="space-y-3 border-t pt-4">
                   <p className="text-sm font-semibold">判断支援情報</p>
                   {selectedArticle.impactOnResidents && (
@@ -655,27 +753,41 @@ function ReviewPageContent() {
                   )}
                 </div>
               )}
-              {/* 判断ボタン + メモ */}
-              <div className="space-y-3 pt-2">
-                <div className="flex gap-3">
-                  {([{ value: "adopted" as Decision, label: "採用" }, { value: "modified" as Decision, label: "修正" }, { value: "pending" as Decision, label: "保留" }]).map((btn) => (
-                    <Button key={btn.value} variant={decisions[selId] === btn.value ? "default" : "outline"}
-                      onClick={() => handleDecision(selectedArticle, btn.value)} className="flex-1">{btn.label}</Button>
-                  ))}
-                </div>
-                <div className="relative">
-                  <textarea placeholder="メモ（任意）" aria-label="レビューメモを入力" value={memos[selId] ?? ""} onChange={(e) => handleMemoChange(e.target.value)}
-                    className="w-full text-base p-3 border rounded-lg bg-background resize-none h-16" />
-                  {memoSaveStatus !== "idle" && (
-                    <span className={`absolute right-2 bottom-2 text-sm ${memoSaveStatus === "saving" ? "text-muted-foreground" : memoSaveStatus === "saved" ? "text-green-600" : "text-red-500"}`}>
-                      {memoSaveStatus === "saving" ? "保存中..." : memoSaveStatus === "saved" ? "保存済み" : "保存失敗"}
-                    </span>
-                  )}
-                </div>
-              </div>
+              {/* 相互参照パネル */}
+              {crossRefGraph && (
+                <CrossRefPanel
+                  articleNum={selectedArticle.articleNum}
+                  graph={crossRefGraph}
+                  onArticleClick={(articleNum) => {
+                    const a = articles.find((art) => art.articleNum === articleNum);
+                    if (a?.id) setSelectedId(a.id);
+                  }}
+                />
+              )}
+              {/* 判断パネル（採用/現行維持/修正/保留） */}
+              <ArticleDecisionPanel
+                decision={(decisions[selId] ?? null) as import("@/components/review/article-decision-panel").ArticleDecision}
+                onDecide={(d) => {
+                  if (d === null) return;
+                  handleDecision(selectedArticle, d as Decision);
+                }}
+                hasReformText={!!(selectedArticle.reformText || selectedArticle.draft)}
+                hasOriginal={!!selectedArticle.original}
+                hasManagementDraft={!!selectedArticle.managementDraft}
+                memo={memos[selId] ?? ""}
+                onMemoChange={handleMemoChange}
+              />
+              {memoSaveStatus !== "idle" && (
+                <span className={`text-sm ${memoSaveStatus === "saving" ? "text-muted-foreground" : memoSaveStatus === "saved" ? "text-green-600" : "text-red-500"}`}>
+                  {memoSaveStatus === "saving" ? "保存中..." : memoSaveStatus === "saved" ? "保存済み" : "保存失敗"}
+                </span>
+              )}
             </CardContent>
           </Card>
         )}
+
+        </>)}
+        {/* viewMode === "table" の閉じ */}
 
         {/* 次のステップへ CTA */}
         {articles.length > 0 && (
@@ -710,6 +822,7 @@ function ReviewPageContent() {
           </Card>
         )}
       </main>
+      </div>
       <AppFooter />
     </div>
   );

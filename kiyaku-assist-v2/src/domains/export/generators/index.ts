@@ -4,3 +4,4 @@
 export { MarkdownGenerator } from "./markdown";
 export { CsvGenerator } from "./csv";
 export { PdfGenerator } from "./pdf";
+export { WordGenerator } from "./word";

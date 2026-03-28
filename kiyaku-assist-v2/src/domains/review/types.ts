@@ -5,11 +5,19 @@
  */
 
 /** 条文の決定状態 */
-export type ArticleDecision = "adopted" | "modified" | "pending" | null;
+export type ArticleDecision =
+  | "adopted"
+  | "modified"
+  | "keep-current"
+  | "adopt-management"
+  | "pending"
+  | null;
 
 /** 状態遷移イベント */
 export type ReviewEvent =
   | { type: "ADOPT" }
+  | { type: "KEEP_CURRENT" }
+  | { type: "ADOPT_MANAGEMENT" }
   | { type: "MODIFY"; newText: string; reason: string }
   | { type: "RESET" }
   | { type: "ADD_MEMO"; memo: string };
@@ -48,6 +56,8 @@ export interface ReviewProgress {
   adopted: number;
   /** 修正済み */
   modified: number;
+  /** 現行維持 */
+  keepCurrent: number;
   /** 保留 */
   pending: number;
   /** 未決定 */

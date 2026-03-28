@@ -23,6 +23,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "diff": "^8.0.4",
+    "docx": "^9.6.1",
     "firebase": "^12.10.0",
     "firebase-admin": "^13.7.0",
     "lucide-react": "^0.576.0",

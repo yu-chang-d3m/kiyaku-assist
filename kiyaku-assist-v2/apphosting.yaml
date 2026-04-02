@@ -10,6 +10,9 @@ runConfig:
 env:
   - variable: ANTHROPIC_API_KEY
     secret: ANTHROPIC_API_KEY
+  # 管理者 UID リスト（カンマ区切り）— /api/admin/* の実行に必要
+  - variable: ADMIN_UIDS
+    secret: ADMIN_UIDS
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     value: AIzaSyBICmL7ijSPUoO9UGltHF_qkciPqUR6vXY
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN

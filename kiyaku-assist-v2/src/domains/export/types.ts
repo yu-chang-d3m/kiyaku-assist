@@ -36,7 +36,16 @@ export interface ExportArticle {
   transitionalMeasure?: string;
   /** 標準管理規約との対比説明 */
   standardRuleComparison?: string;
+  /** プライマリ意味グループ */
+  semanticGroup?: string;
+  /** セカンダリ意味グループ */
+  secondaryGroups?: string[];
+  /** 課題グループ */
+  issueGroup?: string;
 }
+
+/** ソート順 */
+export type ExportSortOrder = "priority" | "chapter";
 
 /** エクスポート設定 */
 export interface ExportOptions {
@@ -48,6 +57,8 @@ export interface ExportOptions {
   filter?: ExportFilter;
   /** 生成日時を含めるか */
   includeTimestamp: boolean;
+  /** ソート順（デフォルト: "priority" — 優先度→意味グループ順） */
+  sortOrder?: ExportSortOrder;
 }
 
 /** エクスポートフィルタ */

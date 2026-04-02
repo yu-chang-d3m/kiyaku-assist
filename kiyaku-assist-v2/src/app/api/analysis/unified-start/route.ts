@@ -9,9 +9,10 @@
  *   Phase 3: 改正案生成（マンション用にカスタマイズ）
  *
  * 進捗は Server-Sent Events で返却する。
+ * 所有者のみアクセス可能。
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import * as z from "zod/v4";
 import { batchRetrieve } from "@/domains/analysis/retriever";
 import { analyzeGaps, type DocumentType } from "@/domains/analysis/analyzer";
@@ -24,6 +25,7 @@ import {
 } from "@/shared/db/server-actions";
 import { inferChapterFromCategory } from "@/shared/db/chapter-utils";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth, verifyProjectOwner } from "@/shared/api/auth";
 
 // ---------- バリデーション ----------
 
@@ -43,6 +45,10 @@ const requestSchema = z.object({
 // ---------- ハンドラ ----------
 
 export async function POST(request: NextRequest) {
+  // 認証チェック（ストリーム開始前）
+  const auth = await verifyAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
   let validatedData: z.infer<typeof requestSchema>;
   try {
     const body = await request.json();
@@ -64,6 +70,10 @@ export async function POST(request: NextRequest) {
   }
 
   const { projectId, articles } = validatedData;
+
+  // プロジェクト所有者チェック
+  const ownerCheck = await verifyProjectOwner(projectId, auth.uid);
+  if (ownerCheck instanceof NextResponse) return ownerCheck;
 
   const stream = new ReadableStream({
     async start(controller) {

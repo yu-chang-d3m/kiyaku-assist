@@ -122,6 +122,14 @@ function ReviewPageContent() {
         original: item.currentText, draft: "", summary: item.gapSummary, explanation: item.rationale,
         importance: item.importance, baseRef: item.standardRef, decision: null,
         modificationHistory: [], memo: "", category: item.category,
+        // 分類情報をパススルー
+        gapType: item.gapType,
+        relatedLawRefs: item.relatedLawRefs,
+        semanticGroup: item.semanticGroup,
+        secondaryGroups: item.secondaryGroups,
+        standardArticleNum: item.standardArticleNum,
+        detailedBackground: item.detailedBackground,
+        issueGroup: item.issueGroup,
       })),
     [],
   );

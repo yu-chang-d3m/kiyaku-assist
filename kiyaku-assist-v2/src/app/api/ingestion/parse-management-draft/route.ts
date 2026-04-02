@@ -3,6 +3,7 @@
  *
  * POST: テキスト or ファイルを受け取り、既存 ReviewArticle とマッチングして保存
  * SSE で進捗を返す。
+ * 認証必須（プロジェクト所有者のみ）。
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -12,11 +13,16 @@ import {
   saveManagementDraftToReviewArticles,
 } from "@/shared/db/server-actions";
 import { createChildLogger } from "@/shared/observability/logger";
+import { verifyAuth, verifyProjectOwner } from "@/shared/api/auth";
 
 const logger = createChildLogger({ module: "api:parse-management-draft" });
 
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const formData = await request.formData();
     const projectId = formData.get("projectId") as string;
     const text = formData.get("text") as string | null;
@@ -28,6 +34,10 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    // プロジェクト所有者チェック
+    const ownerCheck = await verifyProjectOwner(projectId, auth.uid);
+    if (ownerCheck instanceof NextResponse) return ownerCheck;
 
     if (!text && !file) {
       return NextResponse.json(

@@ -3,6 +3,7 @@
  *
  * R7 標準管理規約 Markdown をパースし、LLM で意味グループにマッピングして
  * Firestore standardArticles コレクションに格納する。
+ * 管理者認証必須（ADMIN_UIDS に含まれる UID のみ実行可能）。
  *
  * POST /api/admin/seed-standard
  * - SSE ストリーミングで進捗を返す
@@ -11,11 +12,12 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { parseStandardRules, getParseStats } from "@/domains/taxonomy/standard-parser";
 import { mapStandardArticlesToTaxonomy } from "@/domains/taxonomy/mapper";
 import { saveStandardArticles } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
+import { verifyAdmin } from "@/shared/api/auth";
 
 /** R7 標準管理規約ファイルパス */
 const R7_FILE = path.resolve(
@@ -23,7 +25,11 @@ const R7_FILE = path.resolve(
   "../data/mlit/mlit_standard_rules_r7_2025.md",
 );
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  // 認証チェック（ストリーム開始前）
+  const auth = await verifyAdmin(request);
+  if (auth instanceof NextResponse) return auth;
+
   // ファイル存在チェック
   if (!fs.existsSync(R7_FILE)) {
     return NextResponse.json(

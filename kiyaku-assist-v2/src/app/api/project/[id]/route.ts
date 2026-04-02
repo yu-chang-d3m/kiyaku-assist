@@ -1,25 +1,33 @@
 /**
- * プロジェクト詳細 API（取得・更新）
+ * プロジェクト詳細 API（取得・更新・削除）
  *
- * GET   /api/project/[id] — プロジェクト詳細を取得
- * PATCH /api/project/[id] — プロジェクトを部分更新
+ * GET    /api/project/[id] — プロジェクト詳細を取得（所有者のみ）
+ * PATCH  /api/project/[id] — プロジェクトを部分更新（所有者のみ）
+ * DELETE /api/project/[id] — プロジェクトを削除（所有者のみ）
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getProject, updateProject, deleteProject } from "@/shared/db/server-actions";
 import { ProjectUpdateSchema } from "@/shared/db/schemas";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth, verifyProjectOwner } from "@/shared/api/auth";
 
 /**
  * GET: プロジェクト詳細を取得する
- * 存在しない場合は 404 を返す。
+ * 所有者のみアクセス可能。
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { id } = await params;
+
+    const ownerCheck = await verifyProjectOwner(id, auth.uid);
+    if (ownerCheck instanceof NextResponse) return ownerCheck;
 
     logger.info({ projectId: id }, "プロジェクト詳細を取得");
 
@@ -44,21 +52,20 @@ export async function GET(
 
 /**
  * DELETE: プロジェクトとその関連データを削除する
+ * 所有者のみ削除可能。
  */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { id } = await params;
 
-    const existing = await getProject(id);
-    if (!existing) {
-      return NextResponse.json(
-        { error: "プロジェクトが見つかりません" },
-        { status: 404 },
-      );
-    }
+    const ownerCheck = await verifyProjectOwner(id, auth.uid);
+    if (ownerCheck instanceof NextResponse) return ownerCheck;
 
     logger.info({ projectId: id }, "プロジェクトを削除");
 
@@ -76,13 +83,20 @@ export async function DELETE(
 
 /**
  * PATCH: プロジェクトを部分更新する
+ * 所有者のみ更新可能。
  */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { id } = await params;
+
+    const ownerCheck = await verifyProjectOwner(id, auth.uid);
+    if (ownerCheck instanceof NextResponse) return ownerCheck;
 
     // リクエストボディの取得
     const body = await request.json();
@@ -101,15 +115,6 @@ export async function PATCH(
             parsed.error.issues.map((i) => i.message).join(", "),
         },
         { status: 400 },
-      );
-    }
-
-    // プロジェクトの存在確認
-    const existing = await getProject(id);
-    if (!existing) {
-      return NextResponse.json(
-        { error: "プロジェクトが見つかりません" },
-        { status: 404 },
       );
     }
 

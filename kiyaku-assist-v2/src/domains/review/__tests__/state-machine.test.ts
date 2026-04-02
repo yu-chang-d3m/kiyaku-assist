@@ -30,6 +30,22 @@ describe("applyEvent", () => {
     expect(newState.history).toEqual([]);
   });
 
+  test("KEEP_CURRENT イベントで keep-current に遷移する", () => {
+    const newState = applyEvent(initialState, { type: "KEEP_CURRENT" });
+
+    expect(newState.decision).toBe("keep-current");
+    expect(newState.currentDraft).toBe("元のドラフト");
+    expect(newState.history).toEqual([]);
+  });
+
+  test("ADOPT_MANAGEMENT イベントで adopt-management に遷移する", () => {
+    const newState = applyEvent(initialState, { type: "ADOPT_MANAGEMENT" });
+
+    expect(newState.decision).toBe("adopt-management");
+    expect(newState.currentDraft).toBe("元のドラフト");
+    expect(newState.history).toEqual([]);
+  });
+
   test("MODIFY イベントで modified に遷移し、履歴が追加される", () => {
     const newState = applyEvent(initialState, {
       type: "MODIFY",
@@ -95,6 +111,8 @@ describe("isValidTransition", () => {
   test("null（未決定）からはどの状態にも遷移可能", () => {
     expect(isValidTransition(null, "adopted")).toBe(true);
     expect(isValidTransition(null, "modified")).toBe(true);
+    expect(isValidTransition(null, "keep-current")).toBe(true);
+    expect(isValidTransition(null, "adopt-management")).toBe(true);
     expect(isValidTransition(null, "pending")).toBe(true);
   });
 
@@ -116,6 +134,20 @@ describe("isValidTransition", () => {
     expect(isValidTransition("modified", null)).toBe(true);
     expect(isValidTransition("modified", "adopted")).toBe(false);
     expect(isValidTransition("modified", "modified")).toBe(false);
+  });
+
+  test("keep-current からは pending または null にのみ遷移可能", () => {
+    expect(isValidTransition("keep-current", "pending")).toBe(true);
+    expect(isValidTransition("keep-current", null)).toBe(true);
+    expect(isValidTransition("keep-current", "adopted")).toBe(false);
+    expect(isValidTransition("keep-current", "modified")).toBe(false);
+  });
+
+  test("adopt-management からは pending または null にのみ遷移可能", () => {
+    expect(isValidTransition("adopt-management", "pending")).toBe(true);
+    expect(isValidTransition("adopt-management", null)).toBe(true);
+    expect(isValidTransition("adopt-management", "adopted")).toBe(false);
+    expect(isValidTransition("adopt-management", "modified")).toBe(false);
   });
 });
 
@@ -168,5 +200,29 @@ describe("calculateProgress", () => {
 
     const progress = calculateProgress(states);
     expect(progress.progressPercent).toBe(100);
+  });
+
+  test("keep-current も進捗に含まれる", () => {
+    const states: ReviewArticleState[] = [
+      { ...createInitialState("第1条", "d1"), decision: "keep-current" },
+      { ...createInitialState("第2条", "d2"), decision: "adopted" },
+    ];
+
+    const progress = calculateProgress(states);
+    expect(progress.keepCurrent).toBe(1);
+    expect(progress.adopted).toBe(1);
+    expect(progress.progressPercent).toBe(100);
+  });
+
+  test("adopt-management は adopted としてカウントされ進捗に含まれる", () => {
+    const states: ReviewArticleState[] = [
+      { ...createInitialState("第1条", "d1"), decision: "adopt-management" },
+      { ...createInitialState("第2条", "d2"), decision: null },
+    ];
+
+    const progress = calculateProgress(states);
+    expect(progress.adopted).toBe(1); // adopt-management は adopted にカウント
+    expect(progress.undecided).toBe(1);
+    expect(progress.progressPercent).toBe(50);
   });
 });

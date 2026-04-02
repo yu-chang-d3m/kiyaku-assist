@@ -318,19 +318,19 @@ describe("analyzeGaps — バッチ分析", () => {
     expect(result.summary.compliant).toBe(0);
   });
 
-  it("BATCH_SIZE (10) 超の場合、複数バッチに分割される", async () => {
-    const articleNums = Array.from({ length: 12 }, (_, i) => `第${i + 1}条`);
+  it("BATCH_SIZE (5) 超の場合、複数バッチに分割される", async () => {
+    const articleNums = Array.from({ length: 7 }, (_, i) => `第${i + 1}条`);
     const articles = articleNums.map((num) => makeArticleInput({ articleNum: num }));
 
     // concurrency=1 で順次実行し、各バッチの結果を正しくマッピング
     mockCallWithStructuredOutput
-      .mockResolvedValueOnce(makeBatchAnalysisOutput(articleNums.slice(0, 10)))
-      .mockResolvedValueOnce(makeBatchAnalysisOutput(articleNums.slice(10)));
+      .mockResolvedValueOnce(makeBatchAnalysisOutput(articleNums.slice(0, 5)))
+      .mockResolvedValueOnce(makeBatchAnalysisOutput(articleNums.slice(5)));
 
     const result = await analyzeGaps("proj-large", articles, undefined, 1);
 
-    expect(result.items).toHaveLength(12);
-    // 2回の API 呼び出し（10件バッチ + 2件バッチ）
+    expect(result.items).toHaveLength(7);
+    // 2回の API 呼び出し（5件バッチ + 2件バッチ）
     expect(mockCallWithStructuredOutput).toHaveBeenCalledTimes(2);
   });
 
@@ -381,25 +381,25 @@ describe("analyzeGaps — バッチ分析", () => {
 
 describe("analyzeGaps — エラーハンドリング", () => {
   it("バッチ全体が失敗した場合、errors に記録されるが他バッチは続行する", async () => {
-    // 20件 → 2バッチ（10+10）、concurrency=1 で順次実行
-    const articleNums = Array.from({ length: 20 }, (_, i) => `第${i + 1}条`);
+    // 10件 → 2バッチ（5+5）、concurrency=1 で順次実行
+    const articleNums = Array.from({ length: 10 }, (_, i) => `第${i + 1}条`);
     const articles = articleNums.map((num) => makeArticleInput({ articleNum: num }));
 
     // バッチ内容に基づいて挙動を制御
     // （mockRejectedValueOnce では個別リトライが batch 2 用モックを消費してしまうため）
     mockCallWithStructuredOutput.mockImplementation(async (params: { userMessage: string }) => {
-      // バッチ2（第11条〜第20条）の呼び出しのみ成功させる
-      if (params.userMessage.includes("第11条")) {
-        return makeBatchAnalysisOutput(articleNums.slice(10));
+      // バッチ2（第6条〜第10条）の呼び出しのみ成功させる
+      if (params.userMessage.includes("第6条")) {
+        return makeBatchAnalysisOutput(articleNums.slice(5));
       }
       throw new Error("API エラー");
     });
 
     const result = await analyzeGaps("proj-error", articles, undefined, 1);
 
-    // バッチ1は失敗（0件）、バッチ2は成功（10件）
-    expect(result.items).toHaveLength(10);
-    expect(result.items[0].articleNum).toBe("第11条");
+    // バッチ1は失敗（0件）、バッチ2は成功（5件）
+    expect(result.items).toHaveLength(5);
+    expect(result.items[0].articleNum).toBe("第6条");
   });
 
   it("onBatchComplete コールバックが進捗を正しく報告する", async () => {
@@ -542,8 +542,8 @@ describe("analyzeGaps — メタデータ", () => {
 describe("analyzeGaps — concurrency 制御", () => {
   it("concurrency=1 の場合、バッチが順次実行される", async () => {
     const callOrder: number[] = [];
-    const articleNums1 = Array.from({ length: 10 }, (_, i) => `第${i + 1}条`);
-    const articleNums2 = Array.from({ length: 5 }, (_, i) => `第${i + 11}条`);
+    const articleNums1 = Array.from({ length: 5 }, (_, i) => `第${i + 1}条`);
+    const articleNums2 = Array.from({ length: 3 }, (_, i) => `第${i + 6}条`);
     const articles = [...articleNums1, ...articleNums2].map((num) =>
       makeArticleInput({ articleNum: num }),
     );

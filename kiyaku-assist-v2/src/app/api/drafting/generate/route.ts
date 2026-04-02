@@ -5,6 +5,7 @@
  * 複数条文のドラフトを一括生成し、SSE（Server-Sent Events）で進捗を返却する。
  * サーバー側でリトリーバーを呼び出し、標準管理規約テキストを取得してから生成する。
  * 生成完了後、結果を Firestore に一括保存する。
+ * 認証必須（プロジェクト所有者のみ）。
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -15,6 +16,7 @@ import { batchRetrieve } from "@/domains/analysis/retriever";
 import { batchSaveReviewArticles } from "@/shared/db/server-actions";
 import { inferChapterFromCategory } from "@/shared/db/chapter-utils";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth, verifyProjectOwner } from "@/shared/api/auth";
 
 // ---------- Zod スキーマ ----------
 
@@ -45,6 +47,10 @@ const generateRequestSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     // リクエストボディの取得とバリデーション
     const body = await request.json();
     const parsed = generateRequestSchema.safeParse(body);
@@ -65,6 +71,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { projectId, items, condoContext } = parsed.data;
+
+    // プロジェクト所有者チェック
+    const ownerCheck = await verifyProjectOwner(projectId, auth.uid);
+    if (ownerCheck instanceof NextResponse) return ownerCheck;
+
     const total = items.length;
 
     logger.info(

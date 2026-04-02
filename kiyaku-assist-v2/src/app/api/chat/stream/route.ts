@@ -4,6 +4,7 @@
  * POST /api/chat/stream
  * Server-Sent Events を使用して、チャット応答をストリーミングで返却する。
  * 現時点では generateChatResponse() の結果を擬似ストリーミングで送信する。
+ * 認証必須。
  *
  * SSE イベント:
  *   - thinking: 処理ステータスの通知（searching / generating）
@@ -12,10 +13,11 @@
  *   - error: エラー発生時のメッセージ
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import * as z from "zod/v4";
 import { generateChatResponse } from "@/domains/chat/rag";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth } from "@/shared/api/auth";
 
 /** リクエストボディのバリデーションスキーマ */
 const streamChatRequestSchema = z.object({
@@ -42,6 +44,10 @@ const streamChatRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // 認証チェック（ストリーム開始前）
+  const auth = await verifyAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
   // リクエストボディの取得とバリデーション（ストリーム開始前に行う）
   let validatedData: z.infer<typeof streamChatRequestSchema>;
   try {

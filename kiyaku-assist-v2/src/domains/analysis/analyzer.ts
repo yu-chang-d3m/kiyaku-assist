@@ -112,7 +112,7 @@ function buildSystemPrompt(documentType: DocumentType): string {
 ギャップ分析を行ってください。
 
 分析の観点:
-1. 改正区分所有法（2025年10月施行）への適合性
+1. 改正区分所有法（2026年4月施行）への適合性
 2. 標準管理規約との乖離度
 3. 実務上の重要性（mandatory: 法令違反のリスクあり、recommended: 対応推奨、optional: 対応任意）
 

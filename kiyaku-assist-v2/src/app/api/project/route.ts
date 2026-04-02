@@ -1,7 +1,7 @@
 /**
  * プロジェクト API（一覧・作成）
  *
- * GET  /api/project?userId=xxx — ユーザーのプロジェクト一覧を取得
+ * GET  /api/project           — 認証ユーザーのプロジェクト一覧を取得
  * POST /api/project            — 新規プロジェクトを作成
  */
 
@@ -9,28 +9,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { listProjects, createProject } from "@/shared/db/server-actions";
 import { ProjectCreateSchema } from "@/shared/db/schemas";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth } from "@/shared/api/auth";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET: ユーザーに紐づくプロジェクト一覧を返す
+ * GET: 認証ユーザーに紐づくプロジェクト一覧を返す
+ *
+ * トークンの uid をそのまま使用し、クエリパラメータの userId は不要になった。
  */
 export async function GET(request: NextRequest) {
   try {
-    // クエリパラメータから userId を取得
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: "クエリパラメータ userId は必須です" },
-        { status: 400 },
-      );
-    }
+    logger.info({ userId: auth.uid }, "プロジェクト一覧を取得");
 
-    logger.info({ userId }, "プロジェクト一覧を取得");
-
-    const projects = await listProjects(userId);
+    const projects = await listProjects(auth.uid);
 
     return NextResponse.json(projects);
   } catch (error) {
@@ -44,11 +39,19 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST: 新規プロジェクトを作成し、ドキュメント ID を返す
+ *
+ * リクエストボディの userId はトークンの uid で上書きする。
  */
 export async function POST(request: NextRequest) {
   try {
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     // リクエストボディの取得
     const body = await request.json();
+
+    // トークンの uid を userId として強制上書き
+    body.userId = auth.uid;
 
     // Zod バリデーション
     const parsed = ProjectCreateSchema.safeParse(body);

@@ -4,19 +4,24 @@
  * GET /api/analysis/:projectId
  * 指定されたプロジェクトIDに紐づくレビュー済み条文の一覧を返す。
  * Firestore から getReviewArticles() で取得した結果をそのまま JSON で返却する。
+ * 所有者のみアクセス可能。
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getReviewArticles } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth, verifyProjectOwner } from "@/shared/api/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { projectId } = await params;
 
     if (!projectId) {
@@ -25,6 +30,9 @@ export async function GET(
         { status: 400 }
       );
     }
+
+    const ownerCheck = await verifyProjectOwner(projectId, auth.uid);
+    if (ownerCheck instanceof NextResponse) return ownerCheck;
 
     logger.info({ projectId }, "分析結果を取得");
 

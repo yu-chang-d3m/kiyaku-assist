@@ -5,12 +5,14 @@
  * RAG ベースのチャット応答を生成する。
  * ユーザーの質問に対して Vertex AI Search で関連資料を検索し、
  * Claude で回答を生成して返却する。
+ * 認証必須。
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import * as z from "zod/v4";
 import { generateChatResponse } from "@/domains/chat/rag";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth } from "@/shared/api/auth";
 
 /** リクエストボディのバリデーションスキーマ */
 const chatRequestSchema = z.object({
@@ -38,6 +40,10 @@ const chatRequestSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     // リクエストボディの取得
     const body = await request.json();
 

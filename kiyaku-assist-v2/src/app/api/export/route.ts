@@ -5,6 +5,7 @@
  * レビュー結果を Markdown または CSV 形式でエクスポートする。
  * Firestore からレビュー記事を取得し、フィルタを適用後、
  * 指定形式のファイルとしてダウンロード可能なレスポンスを返す。
+ * 認証必須（プロジェクト所有者のみ）。
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -20,6 +21,7 @@ import type { ExportGenerator, ExportOptions } from "@/domains/export/types";
 import type { EnhancedExportOptions } from "@/domains/export/export-types";
 import { logger } from "@/shared/observability/logger";
 import { toExportArticle } from "@/domains/export/presentation";
+import { verifyAuth, verifyProjectOwner } from "@/shared/api/auth";
 
 /** リクエストボディのバリデーションスキーマ */
 const exportRequestSchema = z.object({
@@ -38,6 +40,8 @@ const exportRequestSchema = z.object({
     })
     .optional(),
   includeTimestamp: z.boolean(),
+  // ソート順（デフォルト: priority — 優先度→意味グループ順）
+  sortOrder: z.enum(["priority", "chapter"]).optional(),
   // Word エクスポート用の拡張オプション
   includeCoverPage: z.boolean().optional(),
   includeSummaryTable: z.boolean().optional(),
@@ -54,6 +58,10 @@ const generators: Record<ExportOptions["format"], ExportGenerator> = {
 
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     // リクエストボディの取得
     const body = await request.json();
 
@@ -75,9 +83,13 @@ export async function POST(request: NextRequest) {
     }
 
     const {
-      projectId, condoName, format, filter, includeTimestamp,
+      projectId, condoName, format, filter, includeTimestamp, sortOrder,
       includeCoverPage, includeSummaryTable, location, managementCompany,
     } = parsed.data;
+
+    // プロジェクト所有者チェック
+    const ownerCheck = await verifyProjectOwner(projectId, auth.uid);
+    if (ownerCheck instanceof NextResponse) return ownerCheck;
 
     logger.info({ projectId, format }, "エクスポート処理を開始");
 
@@ -100,6 +112,7 @@ export async function POST(request: NextRequest) {
       format,
       filter,
       includeTimestamp,
+      sortOrder,
     };
 
     // ジェネレーターを選択して実行

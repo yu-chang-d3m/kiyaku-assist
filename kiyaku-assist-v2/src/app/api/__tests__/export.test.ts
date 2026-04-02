@@ -13,6 +13,12 @@ import {
 
 // ---------- モック ----------
 
+// 認証バイパス: verifyAuth は常に成功を返す
+vi.mock("@/shared/api/auth", () => ({
+  verifyAuth: vi.fn().mockResolvedValue({ uid: "test-user-001" }),
+  verifyProjectOwner: vi.fn().mockResolvedValue(true),
+}));
+
 const mockGetReviewArticles = vi.fn();
 
 vi.mock("@/shared/db/server-actions", () => ({

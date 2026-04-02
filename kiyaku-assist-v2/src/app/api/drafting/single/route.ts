@@ -4,6 +4,7 @@
  * POST /api/drafting/single
  * 1条文のドラフトを再生成する。特定条文のリトライや再生成に使用する。
  * サーバー側でリトリーバーを呼び出し、標準管理規約テキストを取得してから生成する。
+ * 認証必須。
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -11,6 +12,7 @@ import * as z from "zod/v4";
 import { generateDraft } from "@/domains/drafting/drafter";
 import { retrieveRelatedStandards } from "@/domains/analysis/retriever";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth } from "@/shared/api/auth";
 
 // ---------- Zod スキーマ ----------
 
@@ -35,6 +37,10 @@ const draftRequestSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     // リクエストボディの取得とバリデーション
     const body = await request.json();
     const parsed = draftRequestSchema.safeParse(body);

@@ -17,8 +17,42 @@ import type { ReviewEvent, ReviewProgress } from "@/domains/review/types";
 import type { ChatMessage, ChatResponse } from "@/domains/chat/types";
 import type { ReviewArticle, Project } from "@/shared/db/types";
 import { clearSession } from "@/shared/store";
+import { getFirebaseAuth, isFirebaseConfigured } from "@/shared/db/firestore";
 
 // ---------- 共通ヘルパー ----------
+
+/**
+ * Firebase Auth の ID トークンを取得する
+ *
+ * ログイン済みの場合は Bearer トークンを返す。
+ * 未ログイン or Firebase 未設定時は undefined を返す。
+ */
+async function getAuthToken(): Promise<string | undefined> {
+  if (!isFirebaseConfigured) return undefined;
+  try {
+    const auth = getFirebaseAuth();
+    const user = auth.currentUser;
+    if (!user) return undefined;
+    const token = await user.getIdToken();
+    return token;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 認証ヘッダーを含むヘッダーオブジェクトを構築する
+ */
+async function authHeaders(
+  extra?: Record<string, string>,
+): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { ...extra };
+  const token = await getAuthToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 /**
  * レスポンスの共通エラーハンドリング
@@ -116,7 +150,7 @@ async function consumeSSE(
 export async function callParse(text: string): Promise<ParseResult> {
   const res = await fetch("/api/ingestion/parse", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ text }),
   });
   if (!res.ok) await handleResponseError(res, "パースに失敗しました");
@@ -133,6 +167,7 @@ export async function callParseFile(file: File): Promise<ParseResult> {
 
   const res = await fetch("/api/ingestion/parse-file", {
     method: "POST",
+    headers: await authHeaders(),
     body: formData,
   });
   if (!res.ok) await handleResponseError(res, "ファイルのパースに失敗しました");
@@ -171,7 +206,7 @@ export function startAnalysis(
     try {
       const res = await fetch("/api/analysis/start", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ projectId, articles }),
         signal: controller.signal,
       });
@@ -249,7 +284,7 @@ export function startUnifiedAnalysis(
     try {
       const res = await fetch("/api/analysis/unified-start", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ projectId, articles }),
         signal: controller.signal,
       });
@@ -304,6 +339,7 @@ export async function getAnalysisResult(
 ): Promise<ReviewArticle[]> {
   const res = await fetch(
     `/api/analysis/${encodeURIComponent(projectId)}`,
+    { headers: await authHeaders() },
   );
   if (!res.ok) await handleResponseError(res, "分析結果の取得に失敗しました");
   return res.json();
@@ -359,7 +395,7 @@ export function startAutoGenerate(
     try {
       const res = await fetch("/api/drafting/auto-generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ projectId, mode, condoContext }),
         signal: controller.signal,
       });
@@ -422,7 +458,7 @@ export function startDrafting(
     try {
       const res = await fetch("/api/drafting/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ projectId, items, condoContext }),
         signal: controller.signal,
       });
@@ -488,7 +524,7 @@ export async function callDraftSingle(
 ): Promise<DraftResult> {
   const res = await fetch("/api/drafting/single", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(request),
   });
   if (!res.ok) await handleResponseError(res, "ドラフト生成に失敗しました");
@@ -513,7 +549,7 @@ export async function callChat(
 ): Promise<ChatResponse> {
   const res = await fetch("/api/chat", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(request),
   });
   if (!res.ok) await handleResponseError(res, "チャットに失敗しました");
@@ -544,7 +580,7 @@ export function streamChat(
     try {
       const res = await fetch("/api/chat/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ projectId, message, history }),
         signal: controller.signal,
       });
@@ -598,6 +634,10 @@ export interface ExportRequest {
     chapters?: number[];
   };
   includeTimestamp: boolean;
+  /** 所在地（Word 表紙用） */
+  location?: string;
+  /** 管理会社名（Word 表紙用） */
+  managementCompany?: string;
 }
 
 /**
@@ -607,7 +647,7 @@ export interface ExportRequest {
 export async function callExport(request: ExportRequest): Promise<Blob> {
   const res = await fetch("/api/export", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(request),
   });
   if (!res.ok) await handleResponseError(res, "エクスポートに失敗しました");
@@ -638,6 +678,7 @@ export interface ProjectCreate {
 export async function listProjects(userId: string): Promise<Project[]> {
   const res = await fetch(
     `/api/project?userId=${encodeURIComponent(userId)}`,
+    { headers: await authHeaders() },
   );
   if (!res.ok) await handleResponseError(res, "プロジェクト一覧の取得に失敗しました");
   return res.json();
@@ -652,7 +693,7 @@ export async function createProject(
 ): Promise<{ id: string }> {
   const res = await fetch("/api/project", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   });
   if (!res.ok) await handleResponseError(res, "プロジェクトの作成に失敗しました");
@@ -664,7 +705,9 @@ export async function createProject(
  * プロジェクト詳細を取得する
  */
 export async function getProject(id: string): Promise<Project> {
-  const res = await fetch(`/api/project/${encodeURIComponent(id)}`);
+  const res = await fetch(`/api/project/${encodeURIComponent(id)}`, {
+    headers: await authHeaders(),
+  });
   if (!res.ok) await handleResponseError(res, "プロジェクトの取得に失敗しました");
   return res.json();
 }
@@ -676,6 +719,7 @@ export async function getProject(id: string): Promise<Project> {
 export async function deleteProjectApi(id: string): Promise<void> {
   const res = await fetch(`/api/project/${encodeURIComponent(id)}`, {
     method: "DELETE",
+    headers: await authHeaders(),
   });
   if (!res.ok) await handleResponseError(res, "プロジェクトの削除に失敗しました");
 }
@@ -690,7 +734,7 @@ export async function updateProject(
 ): Promise<void> {
   const res = await fetch(`/api/project/${encodeURIComponent(id)}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(data),
   });
   if (!res.ok) await handleResponseError(res, "プロジェクトの更新に失敗しました");
@@ -721,7 +765,7 @@ export async function saveParsedBylawsRemote(
     `/api/project/${encodeURIComponent(projectId)}/parsed-bylaws`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ data }),
     },
   );
@@ -737,6 +781,7 @@ export async function loadParsedBylawsRemote(
 ): Promise<ParseResult | null> {
   const res = await fetch(
     `/api/project/${encodeURIComponent(projectId)}/parsed-bylaws`,
+    { headers: await authHeaders() },
   );
   if (!res.ok) await handleResponseError(res, "パース結果の取得に失敗しました");
   const json = await res.json();
@@ -754,6 +799,7 @@ export async function getReviewArticles(
 ): Promise<{ articles: ReviewArticle[] }> {
   const res = await fetch(
     `/api/review/${encodeURIComponent(projectId)}`,
+    { headers: await authHeaders() },
   );
   if (!res.ok) await handleResponseError(res, "レビュー記事の取得に失敗しました");
   return res.json();
@@ -776,7 +822,7 @@ export async function patchReviewArticle(
     `/api/review/${encodeURIComponent(projectId)}`,
     {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: await authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(data),
     },
   );
@@ -793,7 +839,7 @@ export async function deleteReviewArticlesApi(
 ): Promise<{ deleted: number }> {
   const res = await fetch(`/api/review/${encodeURIComponent(projectId)}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers: await authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ articleNums }),
   });
   if (!res.ok) await handleResponseError(res, "レビュー記事の削除に失敗しました");
@@ -822,7 +868,7 @@ export async function decideReview(
     `/api/review/${encodeURIComponent(projectId)}/decide`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ articleNum, event }),
     },
   );
@@ -839,6 +885,7 @@ export async function getReviewProgress(
 ): Promise<{ progress: ReviewProgress }> {
   const res = await fetch(
     `/api/review/${encodeURIComponent(projectId)}/progress`,
+    { headers: await authHeaders() },
   );
   if (!res.ok) await handleResponseError(res, "レビュー進捗の取得に失敗しました");
   return res.json();
@@ -851,7 +898,10 @@ export async function getReviewProgress(
  * AI キャッシュを全件削除する
  */
 export async function clearAiCache(): Promise<{ deleted: number }> {
-  const res = await fetch("/api/admin/clear-cache", { method: "DELETE" });
+  const res = await fetch("/api/admin/clear-cache", {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
   if (!res.ok) await handleResponseError(res, "AI キャッシュの削除に失敗しました");
   return res.json();
 }
@@ -864,7 +914,10 @@ export async function clearAllData(): Promise<{
   deletedProjects: number;
   deletedCache: number;
 }> {
-  const res = await fetch("/api/admin/clear-data", { method: "DELETE" });
+  const res = await fetch("/api/admin/clear-data", {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
   if (!res.ok) await handleResponseError(res, "全データの削除に失敗しました");
   return res.json();
 }
@@ -895,10 +948,16 @@ export function parseManagementDraft(
     formData.append("file", input.file);
   }
 
-  fetch("/api/ingestion/parse-management-draft", {
-    method: "POST",
-    body: formData,
-    signal: controller.signal,
+  getAuthToken().then((token) => {
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    return fetch("/api/ingestion/parse-management-draft", {
+      method: "POST",
+      headers,
+      body: formData,
+      signal: controller.signal,
+    });
   })
     .then(async (res) => {
       if (!res.ok || !res.body) {

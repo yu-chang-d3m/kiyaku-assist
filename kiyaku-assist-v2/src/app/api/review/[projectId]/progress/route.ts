@@ -3,6 +3,7 @@
  *
  * GET /api/review/[projectId]/progress
  * プロジェクト全体のレビュー進捗（採用/修正/保留/未決定の件数と進捗率）を返す。
+ * 所有者のみアクセス可能。
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -12,17 +13,24 @@ import {
 } from "@/domains/review/state-machine";
 import { getReviewArticles } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth, verifyProjectOwner } from "@/shared/api/auth";
 
 export const dynamic = "force-dynamic";
 
 // ---------- ハンドラ ----------
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   try {
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { projectId } = await params;
+
+    const ownerCheck = await verifyProjectOwner(projectId, auth.uid);
+    if (ownerCheck instanceof NextResponse) return ownerCheck;
 
     logger.info({ projectId }, "レビュー進捗の取得を開始");
 

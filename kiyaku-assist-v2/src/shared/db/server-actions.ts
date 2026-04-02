@@ -236,6 +236,9 @@ export async function clearAllProjects(): Promise<number> {
 
 /**
  * 単一のレビュー記事を保存する（upsert）
+ *
+ * merge: true を使用し、渡されたフィールドのみを更新する。
+ * 未指定のフィールドは既存値が保持される。
  */
 export async function saveReviewArticle(
   projectId: string,
@@ -251,8 +254,37 @@ export async function saveReviewArticle(
     .doc(projectId)
     .collection("reviewArticles")
     .doc(articleId)
-    .set({
-      ...validated,
+    .set(
+      {
+        ...validated,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+}
+
+/**
+ * 単一のレビュー記事を部分更新する
+ *
+ * saveReviewArticle と異なり、ReviewArticleSchema の partial バリデーションを使用。
+ * articleNum は必須（ドキュメント ID 特定用）。
+ * 渡されたフィールドのみを Firestore に書き込む。
+ */
+export async function updateReviewArticle(
+  projectId: string,
+  articleNum: string,
+  fields: Record<string, unknown>,
+): Promise<void> {
+  const db = getAdminDb();
+  const articleId = encodeArticleId(articleNum);
+
+  await db
+    .collection("projects")
+    .doc(projectId)
+    .collection("reviewArticles")
+    .doc(articleId)
+    .update({
+      ...fields,
       updatedAt: FieldValue.serverTimestamp(),
     });
 }
@@ -340,10 +372,14 @@ export async function batchSaveReviewArticles(
         .doc(projectId)
         .collection("reviewArticles")
         .doc(articleId);
-      batch.set(ref, {
-        ...article,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+      batch.set(
+        ref,
+        {
+          ...article,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
     }
 
     await batch.commit();

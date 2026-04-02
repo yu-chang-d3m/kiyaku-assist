@@ -1,4 +1,4 @@
-import type { ExportArticle, ExportFilter } from "@/domains/export/types";
+import type { ExportArticle, ExportFilter, ExportSortOrder } from "@/domains/export/types";
 import type { ReviewArticle } from "@/shared/db/types";
 import { SEMANTIC_GROUPS, SEMANTIC_GROUP_LABELS } from "@/domains/taxonomy/constants";
 
@@ -53,6 +53,9 @@ export function toExportArticle(article: ReviewArticle): ExportArticle {
     riskIfUnchanged: article.riskIfUnchanged,
     transitionalMeasure: article.transitionalMeasure,
     standardRuleComparison: article.standardRuleComparison,
+    semanticGroup: article.semanticGroup,
+    secondaryGroups: article.secondaryGroups,
+    issueGroup: article.issueGroup,
   };
 }
 
@@ -156,6 +159,132 @@ export function groupExportArticlesByPriority(
       articles: articles.filter((a) => a.importance === imp),
     }))
     .filter((g) => g.articles.length > 0);
+}
+
+// ---------- 優先度 → 意味グループ → 課題グループ → 章番号ソート ----------
+
+/** importance の数値優先度（小さいほど上） */
+const IMPORTANCE_ORDER: Record<string, number> = {
+  mandatory: 0,
+  recommended: 1,
+  optional: 2,
+};
+
+/** semanticGroup の数値優先度（SEMANTIC_GROUPS の priority フィールドを利用） */
+const SEMANTIC_GROUP_PRIORITY: Record<string, number> = Object.fromEntries(
+  SEMANTIC_GROUPS.map((g) => [g.id, g.priority]),
+);
+
+/**
+ * 条文を「優先度 → 意味グループ → 課題グループ → 章番号」でソートする。
+ *
+ * 1. importance: mandatory → recommended → optional → (undefined)
+ * 2. semanticGroup（SEMANTIC_GROUPS の priority 順）
+ * 3. issueGroup（同一グループ内でまとめる）
+ * 4. 元の章番号順（フォールバック）
+ */
+export function sortByPriority(articles: ExportArticle[]): ExportArticle[] {
+  return [...articles].sort((a, b) => {
+    // 1. importance
+    const impA = IMPORTANCE_ORDER[a.importance] ?? 99;
+    const impB = IMPORTANCE_ORDER[b.importance] ?? 99;
+    if (impA !== impB) return impA - impB;
+
+    // 2. semanticGroup
+    const sgA = SEMANTIC_GROUP_PRIORITY[a.semanticGroup ?? ""] ?? 99;
+    const sgB = SEMANTIC_GROUP_PRIORITY[b.semanticGroup ?? ""] ?? 99;
+    if (sgA !== sgB) return sgA - sgB;
+
+    // 3. issueGroup（アルファベット順、undefined は後ろ）
+    const igA = a.issueGroup ?? "\uffff";
+    const igB = b.issueGroup ?? "\uffff";
+    if (igA !== igB) return igA.localeCompare(igB);
+
+    // 4. 章番号 → 条番号のフォールバック
+    if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+    return a.articleNum.localeCompare(b.articleNum, "ja", { numeric: true });
+  });
+}
+
+/** sortOrder に応じたソートを適用 */
+export function applySortOrder(
+  articles: ExportArticle[],
+  sortOrder?: ExportSortOrder,
+): ExportArticle[] {
+  const order = sortOrder ?? "priority";
+  if (order === "chapter") {
+    // 元の章番号 → 条番号順
+    return [...articles].sort((a, b) => {
+      if (a.chapter !== b.chapter) return a.chapter - b.chapter;
+      return a.articleNum.localeCompare(b.articleNum, "ja", { numeric: true });
+    });
+  }
+  return sortByPriority(articles);
+}
+
+// ---------- 優先度グループ別構造（Markdown/Word 用） ----------
+
+/** 優先度 → 意味グループのネスト構造 */
+export interface ExportPrioritySection {
+  importance: string;
+  importanceLabel: string;
+  semanticGroups: {
+    groupId: string;
+    groupLabel: string;
+    articles: ExportArticle[];
+  }[];
+}
+
+/** 優先度別 → 意味グループ別にネストしたグルーピングを返す */
+export function groupByPriorityAndSemanticGroup(
+  articles: ExportArticle[],
+): ExportPrioritySection[] {
+  const sorted = sortByPriority(articles);
+
+  const PRIORITY_SECTION_LABELS: Record<string, string> = {
+    mandatory: "法的必須の改正事項",
+    recommended: "推奨される改正事項",
+    optional: "任意の改正事項",
+  };
+
+  const importanceOrder = ["mandatory", "recommended", "optional"] as const;
+  const sections: ExportPrioritySection[] = [];
+
+  for (const imp of importanceOrder) {
+    const impArticles = sorted.filter((a) => a.importance === imp);
+    if (impArticles.length === 0) continue;
+
+    // 意味グループ別にサブグルーピング
+    const sgMap = new Map<string, ExportArticle[]>();
+    for (const article of impArticles) {
+      const gid = article.semanticGroup ?? "misc";
+      const existing = sgMap.get(gid) ?? [];
+      existing.push(article);
+      sgMap.set(gid, existing);
+    }
+
+    // SEMANTIC_GROUPS の priority 順で並べる
+    const semanticGroups = SEMANTIC_GROUPS
+      .filter((g) => sgMap.has(g.id))
+      .map((g) => ({
+        groupId: g.id,
+        groupLabel: g.label,
+        articles: sgMap.get(g.id) ?? [],
+      }));
+
+    // misc がマップにあるがSEMANTIC_GROUPSで見つからない場合のフォールバック
+    if (sgMap.has("misc") && !SEMANTIC_GROUPS.some((g) => g.id === "misc" && sgMap.has(g.id))) {
+      // misc は SEMANTIC_GROUPS に含まれているので通常はここに来ない
+    }
+
+    sections.push({
+      importance: imp,
+      importanceLabel: PRIORITY_SECTION_LABELS[imp] ?? imp,
+      semanticGroups,
+    });
+  }
+
+  return sections;
 }
 
 export { SEMANTIC_GROUP_LABELS };

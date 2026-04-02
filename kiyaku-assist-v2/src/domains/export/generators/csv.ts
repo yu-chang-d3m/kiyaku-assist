@@ -13,6 +13,7 @@ import type {
 } from "@/domains/export/types";
 import {
   applyExportFilter,
+  applySortOrder,
   getDecisionLabel,
   getImportanceLabel,
 } from "@/domains/export/presentation";
@@ -44,7 +45,8 @@ const CSV_HEADERS = [
 export class CsvGenerator implements ExportGenerator {
   generate(articles: ExportArticle[], options: ExportOptions): ExportResult {
     const filtered = applyExportFilter(articles, options.filter);
-    const content = this.buildCsv(filtered);
+    const sorted = applySortOrder(filtered, options.sortOrder);
+    const content = this.buildCsv(sorted);
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
     return {

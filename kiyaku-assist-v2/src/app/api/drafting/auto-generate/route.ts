@@ -4,6 +4,7 @@
  * POST /api/drafting/auto-generate
  * 分析完了後に自動実行。Firestore の ReviewArticle を読み取り、
  * ドラフト未生成の条文に対してドラフトを生成し、Firestore に保存する。
+ * 所有者のみアクセス可能。
  *
  * リクエストボディ:
  *   projectId: string
@@ -16,7 +17,7 @@
  *   error: { message }
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import * as z from "zod/v4";
 import {
   getReviewArticles,
@@ -28,6 +29,7 @@ import { retrieveRelatedStandards } from "@/domains/analysis/retriever";
 import { generateDraftsWithStrategy } from "@/domains/drafting/drafter";
 import type { DraftRequest } from "@/domains/drafting/types";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth, verifyProjectOwner } from "@/shared/api/auth";
 
 const autoGenerateSchema = z.object({
   projectId: z.string().min(1),
@@ -40,6 +42,10 @@ const autoGenerateSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // 認証チェック（ストリーム開始前）
+  const auth = await verifyAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
   let validatedData: z.infer<typeof autoGenerateSchema>;
   try {
     const body = await request.json();
@@ -63,6 +69,10 @@ export async function POST(request: NextRequest) {
   }
 
   const { projectId, mode, condoContext } = validatedData;
+
+  // プロジェクト所有者チェック
+  const ownerCheck = await verifyProjectOwner(projectId, auth.uid);
+  if (ownerCheck instanceof NextResponse) return ownerCheck;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -211,6 +221,17 @@ export async function POST(request: NextRequest) {
               memo: original.memo || "",
               category: draft.category,
               aiRecommendation,
+              // 分析フェーズで付与された分類情報を引き継ぐ
+              gapType: original.gapType,
+              relatedLawRefs: original.relatedLawRefs,
+              semanticGroup: original.semanticGroup,
+              secondaryGroups: original.secondaryGroups,
+              standardArticleNum: original.standardArticleNum,
+              // ドラフト生成で得られた詳細情報を保存
+              impactOnResidents: draft.impactOnResidents,
+              riskIfUnchanged: draft.riskIfUnchanged,
+              transitionalMeasure: draft.transitionalMeasure,
+              standardRuleComparison: draft.standardRuleComparison,
             };
           })
           .filter((x): x is NonNullable<typeof x> => x !== null);

@@ -168,6 +168,8 @@ export default function ExportPage() {
 function ExportPageContent() {
   const [articles, setArticles] = useState<ReviewArticle[]>([]);
   const [condoName, setCondoName] = useState("マンション");
+  const [location, setLocation] = useState("");
+  const [managementCompany, setManagementCompany] = useState("");
   const [progress, setProgress] = useState<ReviewProgress | null>(null);
   const [decisions, setDecisions] = useState<Record<string, "adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null>>({});
   const [phase, setPhase] = useState<"loading" | "no-data" | "ready">(
@@ -254,15 +256,25 @@ function ExportPageContent() {
 
   // ---------- カウント計算 ----------
 
-  const counts = {
-    adopted: Object.values(decisions).filter((d) => d === "adopted").length,
-    modified: Object.values(decisions).filter((d) => d === "modified").length,
-    pending: Object.values(decisions).filter((d) => d === "pending").length,
-    undecided: articles.length -
-      Object.values(decisions).filter(
-        (d) => d === "adopted" || d === "modified" || d === "pending"
-      ).length,
-  };
+  const counts = useMemo(() => {
+    const vals = Object.values(decisions);
+    const adopted = vals.filter((d) => d === "adopted").length;
+    const modified = vals.filter((d) => d === "modified").length;
+    const keepCurrent = vals.filter((d) => d === "keep-current").length;
+    const adoptManagement = vals.filter((d) => d === "adopt-management").length;
+    const pending = vals.filter((d) => d === "pending").length;
+    const decided = vals.filter((d) => d != null && d !== "pending").length;
+    return { adopted, modified, keepCurrent, adoptManagement, pending, decided };
+  }, [decisions]);
+
+  // ---------- 法的必須+保留の警告 ----------
+
+  const mandatoryPendingCount = useMemo(() => {
+    return articles.filter((a) => {
+      const d = a.id ? decisions[a.id] : a.decision;
+      return a.importance === "mandatory" && (!d || d === "pending");
+    }).length;
+  }, [articles, decisions]);
 
   // ---------- エクスポートアクション ----------
 
@@ -278,6 +290,8 @@ function ExportPageContent() {
         condoName,
         format: fmt.format,
         includeTimestamp: true,
+        location: location || undefined,
+        managementCompany: managementCompany || undefined,
       });
 
       const date = new Date().toISOString().split("T")[0];
@@ -392,7 +406,7 @@ function ExportPageContent() {
             <CardTitle className="text-base">レビュー結果サマリー</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-4 text-center">
               <div>
                 <p className="text-2xl font-bold text-green-600">
                   {counts.adopted}
@@ -403,7 +417,19 @@ function ExportPageContent() {
                 <p className="text-2xl font-bold text-amber-600">
                   {counts.modified}
                 </p>
-                <p className="text-sm text-muted-foreground">修正</p>
+                <p className="text-sm text-muted-foreground">修正採用</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-blue-600">
+                  {counts.keepCurrent}
+                </p>
+                <p className="text-sm text-muted-foreground">現行維持</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-indigo-600">
+                  {counts.adoptManagement}
+                </p>
+                <p className="text-sm text-muted-foreground">管理会社案</p>
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-400">
@@ -412,20 +438,66 @@ function ExportPageContent() {
                 <p className="text-sm text-muted-foreground">保留</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-red-400">
-                  {counts.undecided}
+                <p className="text-2xl font-bold text-green-700">
+                  {counts.decided}
                 </p>
-                <p className="text-sm text-muted-foreground">未決定</p>
+                <p className="text-sm text-muted-foreground">判断済み</p>
               </div>
             </div>
             {progress && (
               <div className="mt-4 text-center">
                 <p className="text-sm text-muted-foreground">
-                  全 {articles.length} 条文中{" "}
-                  {counts.adopted + counts.modified + counts.pending} 件判断済み
+                  全 {articles.length} 条文中 {counts.decided} 件判断済み
                 </p>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Word 表紙オプション */}
+        <Card className="mb-6 print:hidden">
+          <CardHeader>
+            <CardTitle className="text-base">Word 表紙オプション</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label htmlFor="condoName" className="block text-sm font-medium mb-1">
+                マンション名
+              </label>
+              <input
+                id="condoName"
+                type="text"
+                value={condoName}
+                onChange={(e) => setCondoName(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label htmlFor="location" className="block text-sm font-medium mb-1">
+                所在地
+              </label>
+              <input
+                id="location"
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="例: 東京都新宿区西新宿1-1-1"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label htmlFor="managementCompany" className="block text-sm font-medium mb-1">
+                管理会社名
+              </label>
+              <input
+                id="managementCompany"
+                type="text"
+                value={managementCompany}
+                onChange={(e) => setManagementCompany(e.target.value)}
+                placeholder="例: 日本ハウジング株式会社"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
           </CardContent>
         </Card>
 
@@ -532,6 +604,25 @@ function ExportPageContent() {
         </div>
 
         <Separator className="mb-6 print:hidden" />
+
+        {/* 法的必須+保留の警告バナー */}
+        {mandatoryPendingCount > 0 && (
+          <Card className="bg-amber-50 border-amber-200 mb-6 print:hidden">
+            <CardContent className="py-4 flex items-start gap-3">
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-200 text-amber-800 font-bold text-sm shrink-0 mt-0.5">
+                !
+              </span>
+              <div>
+                <p className="text-sm font-medium text-amber-800">
+                  法的必須の条文が {mandatoryPendingCount} 件保留中です
+                </p>
+                <p className="text-sm text-amber-700 mt-1">
+                  エクスポート前に判断を確定してください。改正区分所有法（2026年4月施行）への対応が必要な条文です。
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* エクスポート形式カード */}
         <div className="space-y-4 mb-8 print:hidden">

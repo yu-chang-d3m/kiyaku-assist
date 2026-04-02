@@ -4,18 +4,20 @@
  * POST /api/analysis/start
  * 管理規約の条文リストを受け取り、標準管理規約との差分分析を実行する。
  * 進捗は Server-Sent Events (SSE) でリアルタイムに返却する。
+ * 所有者のみアクセス可能。
  *
  * v2.1: バッチ分析対応 — 最大10条文をまとめて1回のClaude API呼び出しで分析し、
  * 処理速度を約4倍に改善。
  */
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import * as z from "zod/v4";
 import { batchRetrieve } from "@/domains/analysis/retriever";
 import { analyzeGaps, type DocumentType } from "@/domains/analysis/analyzer";
-import { batchSaveReviewArticles, getProject } from "@/shared/db/server-actions";
+import { batchSaveReviewArticles, getProject, getStandardArticles } from "@/shared/db/server-actions";
 import { inferChapterFromCategory } from "@/shared/db/chapter-utils";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth, verifyProjectOwner } from "@/shared/api/auth";
 
 /** リクエストボディのバリデーションスキーマ */
 const analysisRequestSchema = z.object({
@@ -32,6 +34,10 @@ const analysisRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  // 認証チェック（ストリーム開始前）
+  const auth = await verifyAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
   let validatedData: z.infer<typeof analysisRequestSchema>;
   try {
     const body = await request.json();
@@ -59,6 +65,10 @@ export async function POST(request: NextRequest) {
   }
 
   const { projectId, articles } = validatedData;
+
+  // プロジェクト所有者チェック
+  const ownerCheck = await verifyProjectOwner(projectId, auth.uid);
+  if (ownerCheck instanceof NextResponse) return ownerCheck;
 
   // Project から documentType を取得
   let documentType: DocumentType = "management-rules";
@@ -139,6 +149,26 @@ export async function POST(request: NextRequest) {
           "ギャップ分析が完了",
         );
 
+        // Phase 2.5: 標準条文マッチングで意味グループを付与
+        const standardArticles = await getStandardArticles();
+        const standardMap = new Map(
+          standardArticles.map((a) => [a.articleNum, a]),
+        );
+
+        for (const item of analysisResult.items) {
+          const std = standardMap.get(item.standardRef?.replace("標準管理規約 ", ""));
+          if (std) {
+            item.semanticGroup = std.semanticGroup;
+            item.secondaryGroups = std.secondaryGroups;
+            item.standardArticleNum = std.articleNum;
+          }
+        }
+
+        logger.info(
+          { projectId, standardCount: standardArticles.length },
+          "標準条文マッチングで意味グループを付与",
+        );
+
         // Phase 3: 分析結果を Firestore に ReviewArticle として保存
         // 成功した分析結果 + 失敗した条文（プレースホルダー）の両方を保存
         try {
@@ -158,6 +188,9 @@ export async function POST(request: NextRequest) {
             category: item.category,
             gapType: item.gapType,
             relatedLawRefs: item.relatedLawRefs,
+            semanticGroup: item.semanticGroup,
+            secondaryGroups: item.secondaryGroups,
+            standardArticleNum: item.standardArticleNum,
           }));
 
           // 分析に失敗した条文もプレースホルダーとして保存

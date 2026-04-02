@@ -4,6 +4,7 @@
  * POST /api/ingestion/parse
  * テキスト形式の管理規約を受け取り、構造化データ（ParseResult）に変換して返す。
  * テキストパース → 正規化の順で処理する。
+ * 認証必須。
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -11,6 +12,7 @@ import * as z from "zod/v4";
 import { normalizeParseResult } from "@/domains/ingestion/normalizer";
 import { TextParser } from "@/domains/ingestion/parsers";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth } from "@/shared/api/auth";
 
 /** リクエストボディのバリデーションスキーマ */
 const parseRequestSchema = z.object({
@@ -19,6 +21,10 @@ const parseRequestSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
 
     const parsed = parseRequestSchema.safeParse(body);

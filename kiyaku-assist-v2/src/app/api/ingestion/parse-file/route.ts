@@ -4,6 +4,7 @@
  * POST /api/ingestion/parse-file
  * multipart/form-data でファイルを受け取り、構造化データ（ParseResult）に変換して返す。
  * 対応形式: PDF (.pdf)、Word (.docx)、テキスト (.txt)
+ * 認証必須。
  *
  * 注意: パーサーは動的インポートする。pdf-parse が pdfjs-dist (DOMMatrix) に依存しており、
  * Cloud Run 環境で静的インポートするとモジュール全体がクラッシュするため。
@@ -13,6 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { normalizeParseResult } from "@/domains/ingestion/normalizer";
 import type { ParseResult } from "@/domains/ingestion/types";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth } from "@/shared/api/auth";
 
 /** 最大ファイルサイズ: 10MB */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -26,6 +28,10 @@ const SUPPORTED_TYPES: Record<string, string> = {
 
 export async function POST(request: NextRequest) {
   try {
+    // 認証チェック
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
 

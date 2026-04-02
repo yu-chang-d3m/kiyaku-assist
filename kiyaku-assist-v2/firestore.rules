@@ -1,16 +1,40 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /projects/{projectId} {
-      // プロジェクトの読み取り・更新: 所有者のみ
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
-      // プロジェクトの新規作成: 認証済みユーザー
-      allow create: if request.auth != null;
 
+    // ---------- プロジェクト ----------
+    match /projects/{projectId} {
+      // プロジェクトの読み取り・更新・削除: 所有者のみ
+      allow read, update, delete: if request.auth != null
+        && request.auth.uid == resource.data.userId;
+      // プロジェクトの新規作成: 認証済みユーザー（userId を自分に設定すること）
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId;
+
+      // レビュー記事: プロジェクト所有者のみ
       match /reviewArticles/{articleId} {
-        // レビュー記事: 認証済みユーザーのみ
-        allow read, write: if request.auth != null;
+        allow read, write: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.userId;
       }
+
+      // メタデータ（パース結果等）: プロジェクト所有者のみ
+      match /metadata/{docId} {
+        allow read, write: if request.auth != null
+          && request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.userId;
+      }
+    }
+
+    // ---------- 標準管理規約条文（グローバル・読み取り専用） ----------
+    match /standardArticles/{articleId} {
+      // 認証済みユーザーは読み取りのみ（書き込みは Admin SDK 経由）
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // ---------- AI キャッシュ（サーバー専用） ----------
+    match /aiCache/{cacheKey} {
+      // クライアントからのアクセスは全拒否（Admin SDK のみ使用）
+      allow read, write: if false;
     }
   }
 }

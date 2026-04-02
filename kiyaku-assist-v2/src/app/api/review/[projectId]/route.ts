@@ -1,19 +1,20 @@
 /**
  * レビュー記事 API
  *
- * GET    /api/review/[projectId] — プロジェクトのレビュー状態を全件取得
- * PATCH  /api/review/[projectId] — 単一条文のレビュー記事を部分更新
- * DELETE /api/review/[projectId] — 指定した条文を一括削除
+ * GET    /api/review/[projectId] — プロジェクトのレビュー状態を全件取得（所有者のみ）
+ * PATCH  /api/review/[projectId] — 単一条文のレビュー記事を部分更新（所有者のみ）
+ * DELETE /api/review/[projectId] — 指定した条文を一括削除（所有者のみ）
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import * as z from "zod/v4";
 import {
   getReviewArticles,
-  saveReviewArticle,
+  updateReviewArticle,
   deleteReviewArticles,
 } from "@/shared/db/server-actions";
 import { logger } from "@/shared/observability/logger";
+import { verifyAuth, verifyProjectOwner } from "@/shared/api/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -33,11 +34,17 @@ const patchRequestSchema = z.object({
  * GET: プロジェクトのレビュー記事を全件取得する
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   try {
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { projectId } = await params;
+
+    const ownerCheck = await verifyProjectOwner(projectId, auth.uid);
+    if (ownerCheck instanceof NextResponse) return ownerCheck;
 
     logger.info({ projectId }, "レビュー記事の取得を開始");
 
@@ -69,7 +76,13 @@ export async function PATCH(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   try {
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { projectId } = await params;
+
+    const ownerCheck = await verifyProjectOwner(projectId, auth.uid);
+    if (ownerCheck instanceof NextResponse) return ownerCheck;
 
     // リクエストボディの取得とバリデーション
     const body = await request.json();
@@ -103,32 +116,22 @@ export async function PATCH(
       );
     }
 
-    // 更新フィールドを反映
-    const updated = {
-      projectId,
-      chapter: existing.chapter,
-      articleNum: existing.articleNum,
-      original: existing.original,
-      draft: draft ?? existing.draft,
-      summary: existing.summary,
-      explanation: existing.explanation,
-      importance: existing.importance,
-      baseRef: existing.baseRef,
-      decision: decision !== undefined ? decision : existing.decision,
-      modificationHistory: existing.modificationHistory,
-      memo: memo !== undefined ? memo : existing.memo,
-      category: existing.category,
-      aiRecommendation: existing.aiRecommendation,
-    };
+    // 更新フィールドのみ組み立て（未指定フィールドは既存値を保持）
+    const updateFields: Record<string, unknown> = {};
+    if (draft !== undefined) updateFields.draft = draft;
+    if (decision !== undefined) updateFields.decision = decision;
+    if (memo !== undefined) updateFields.memo = memo;
 
-    await saveReviewArticle(projectId, updated);
+    await updateReviewArticle(projectId, articleNum, updateFields);
 
     logger.info(
       { projectId, articleNum },
       "レビュー記事を更新完了",
     );
 
-    return NextResponse.json({ article: updated });
+    // レスポンスには既存データ + 更新フィールドをマージして返す
+    const merged = { ...existing, ...updateFields };
+    return NextResponse.json({ article: merged });
   } catch (error) {
     logger.error({ error }, "レビュー記事の更新中にエラーが発生");
     return NextResponse.json(
@@ -154,7 +157,13 @@ export async function DELETE(
   { params }: { params: Promise<{ projectId: string }> },
 ) {
   try {
+    const auth = await verifyAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { projectId } = await params;
+
+    const ownerCheck = await verifyProjectOwner(projectId, auth.uid);
+    if (ownerCheck instanceof NextResponse) return ownerCheck;
 
     const body = await request.json();
     const parsed = deleteRequestSchema.safeParse(body);

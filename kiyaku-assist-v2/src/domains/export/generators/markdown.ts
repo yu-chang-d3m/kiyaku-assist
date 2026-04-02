@@ -13,9 +13,11 @@ import type {
 } from "@/domains/export/types";
 import {
   applyExportFilter,
+  applySortOrder,
   getDecisionLabel,
   getImportanceLabel,
   groupExportArticlesByChapter,
+  groupByPriorityAndSemanticGroup,
 } from "@/domains/export/presentation";
 
 // ---------- ジェネレーター ----------
@@ -23,7 +25,8 @@ import {
 export class MarkdownGenerator implements ExportGenerator {
   generate(articles: ExportArticle[], options: ExportOptions): ExportResult {
     const filtered = applyExportFilter(articles, options.filter);
-    const content = this.buildMarkdown(filtered, options);
+    const sorted = applySortOrder(filtered, options.sortOrder);
+    const content = this.buildMarkdown(sorted, options);
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
     return {
@@ -53,80 +56,38 @@ export class MarkdownGenerator implements ExportGenerator {
     lines.push("---");
     lines.push("");
 
-    // 章ごとにグループ化
-    const chapters = groupExportArticlesByChapter(articles);
+    const sortOrder = options.sortOrder ?? "priority";
 
-    for (const chapter of chapters) {
-      const chapterNum = chapter.chapter;
-      const chapterTitle = chapter.chapterTitle || `第${chapterNum}章`;
-      lines.push(`## 第${chapterNum}章 ${chapterTitle}`);
-      lines.push("");
+    if (sortOrder === "priority") {
+      // 優先度 → 意味グループ別構成
+      const sections = groupByPriorityAndSemanticGroup(articles);
 
-      for (const article of chapter.articles) {
-        lines.push(`### ${article.articleNum}`);
+      for (const section of sections) {
+        lines.push(`## ${section.importanceLabel}`);
         lines.push("");
 
-        // メタ情報
-        const importance = getImportanceLabel(article.importance);
-        const decision = getDecisionLabel(article.decision);
-        lines.push(`| 項目 | 内容 |`);
-        lines.push(`|------|------|`);
-        lines.push(`| 重要度 | ${importance} |`);
-        lines.push(`| 判定 | ${decision} |`);
-        lines.push(`| 準拠 | ${article.baseRef} |`);
-        lines.push("");
+        for (const sg of section.semanticGroups) {
+          lines.push(`### ${sg.groupLabel}`);
+          lines.push("");
 
-        // 新旧対照表
-        if (article.original) {
-          const escOriginal = this.escapeTableCell(article.original);
-          const escDraft = this.escapeTableCell(article.draft);
-          lines.push("#### 新旧対照表");
-          lines.push("");
-          lines.push("| 現行規約 | 改定案 |");
-          lines.push("|---------|-------|");
-          lines.push(`| ${escOriginal} | ${escDraft} |`);
-          lines.push("");
-        } else {
-          lines.push("**改定案（新規追加）:**");
-          lines.push("");
-          lines.push(article.draft);
-          lines.push("");
-        }
-
-        // 要約と解説
-        lines.push(`**要約:** ${article.summary}`);
-        lines.push("");
-        lines.push(`**解説:** ${article.explanation}`);
-        lines.push("");
-
-        // 判断支援情報
-        if (article.impactOnResidents || article.riskIfUnchanged || article.transitionalMeasure || article.standardRuleComparison || (article.relatedLawRefs && article.relatedLawRefs.length > 0)) {
-          lines.push("#### 判断支援情報");
-          lines.push("");
-          if (article.impactOnResidents) {
-            lines.push(`**住民生活への影響:** ${article.impactOnResidents}`);
-            lines.push("");
-          }
-          if (article.riskIfUnchanged) {
-            lines.push(`**変更しなかった場合のリスク:** ${article.riskIfUnchanged}`);
-            lines.push("");
-          }
-          if (article.transitionalMeasure) {
-            lines.push(`**経過措置:** ${article.transitionalMeasure}`);
-            lines.push("");
-          }
-          if (article.standardRuleComparison) {
-            lines.push(`**標準管理規約との対比:** ${article.standardRuleComparison}`);
-            lines.push("");
-          }
-          if (article.relatedLawRefs && article.relatedLawRefs.length > 0) {
-            lines.push(`**根拠法令:** ${article.relatedLawRefs.join("、")}`);
-            lines.push("");
+          for (const article of sg.articles) {
+            this.appendArticle(lines, article);
           }
         }
+      }
+    } else {
+      // 章番号順（従来の動作）
+      const chapters = groupExportArticlesByChapter(articles);
 
-        lines.push("---");
+      for (const chapter of chapters) {
+        const chapterNum = chapter.chapter;
+        const chapterTitle = chapter.chapterTitle || `第${chapterNum}章`;
+        lines.push(`## 第${chapterNum}章 ${chapterTitle}`);
         lines.push("");
+
+        for (const article of chapter.articles) {
+          this.appendArticle(lines, article);
+        }
       }
     }
 
@@ -140,6 +101,74 @@ export class MarkdownGenerator implements ExportGenerator {
     );
 
     return lines.join("\n");
+  }
+
+  /** 個別条文の Markdown を追加 */
+  private appendArticle(lines: string[], article: ExportArticle): void {
+    lines.push(`#### ${article.articleNum}`);
+    lines.push("");
+
+    // メタ情報
+    const importance = getImportanceLabel(article.importance);
+    const decision = getDecisionLabel(article.decision);
+    lines.push(`| 項目 | 内容 |`);
+    lines.push(`|------|------|`);
+    lines.push(`| 重要度 | ${importance} |`);
+    lines.push(`| 判定 | ${decision} |`);
+    lines.push(`| 準拠 | ${article.baseRef} |`);
+    lines.push("");
+
+    // 新旧対照表
+    if (article.original) {
+      const escOriginal = this.escapeTableCell(article.original);
+      const escDraft = this.escapeTableCell(article.draft);
+      lines.push("##### 新旧対照表");
+      lines.push("");
+      lines.push("| 現行規約 | 改定案 |");
+      lines.push("|---------|-------|");
+      lines.push(`| ${escOriginal} | ${escDraft} |`);
+      lines.push("");
+    } else {
+      lines.push("**改定案（新規追加）:**");
+      lines.push("");
+      lines.push(article.draft);
+      lines.push("");
+    }
+
+    // 要約と解説
+    lines.push(`**要約:** ${article.summary}`);
+    lines.push("");
+    lines.push(`**解説:** ${article.explanation}`);
+    lines.push("");
+
+    // 判断支援情報
+    if (article.impactOnResidents || article.riskIfUnchanged || article.transitionalMeasure || article.standardRuleComparison || (article.relatedLawRefs && article.relatedLawRefs.length > 0)) {
+      lines.push("##### 判断支援情報");
+      lines.push("");
+      if (article.impactOnResidents) {
+        lines.push(`**住民生活への影響:** ${article.impactOnResidents}`);
+        lines.push("");
+      }
+      if (article.riskIfUnchanged) {
+        lines.push(`**変更しなかった場合のリスク:** ${article.riskIfUnchanged}`);
+        lines.push("");
+      }
+      if (article.transitionalMeasure) {
+        lines.push(`**経過措置:** ${article.transitionalMeasure}`);
+        lines.push("");
+      }
+      if (article.standardRuleComparison) {
+        lines.push(`**標準管理規約との対比:** ${article.standardRuleComparison}`);
+        lines.push("");
+      }
+      if (article.relatedLawRefs && article.relatedLawRefs.length > 0) {
+        lines.push(`**根拠法令:** ${article.relatedLawRefs.join("、")}`);
+        lines.push("");
+      }
+    }
+
+    lines.push("---");
+    lines.push("");
   }
 
   /** Markdown テーブルセル内の改行・パイプをエスケープ */

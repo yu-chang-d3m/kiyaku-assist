@@ -17,12 +17,18 @@ import {
 
 // ---------- モック ----------
 
+// 認証バイパス: verifyAuth は常に成功を返す
+vi.mock("@/shared/api/auth", () => ({
+  verifyAuth: vi.fn().mockResolvedValue({ uid: "test-user-001" }),
+  verifyProjectOwner: vi.fn().mockResolvedValue(true),
+}));
+
 const mockGetReviewArticles = vi.fn();
-const mockSaveReviewArticle = vi.fn();
+const mockUpdateReviewArticle = vi.fn();
 
 vi.mock("@/shared/db/server-actions", () => ({
   getReviewArticles: (...args: unknown[]) => mockGetReviewArticles(...args),
-  saveReviewArticle: (...args: unknown[]) => mockSaveReviewArticle(...args),
+  updateReviewArticle: (...args: unknown[]) => mockUpdateReviewArticle(...args),
 }));
 
 vi.mock("@/shared/observability/logger", () => ({
@@ -131,7 +137,7 @@ describe("PATCH /api/review/[projectId]", () => {
 
   test("レビュー記事の decision を更新する", async () => {
     mockGetReviewArticles.mockResolvedValueOnce(SAMPLE_ARTICLES);
-    mockSaveReviewArticle.mockResolvedValueOnce(undefined);
+    mockUpdateReviewArticle.mockResolvedValueOnce(undefined);
 
     const request = createJsonRequest(`/api/review/${PROJECT_ID}`, "PATCH", {
       articleNum: "第3条",
@@ -143,15 +149,16 @@ describe("PATCH /api/review/[projectId]", () => {
     expect(response.status).toBe(200);
     expect(body.article.articleNum).toBe("第3条");
     expect(body.article.decision).toBe("modified");
-    expect(mockSaveReviewArticle).toHaveBeenCalledWith(
+    expect(mockUpdateReviewArticle).toHaveBeenCalledWith(
       PROJECT_ID,
-      expect.objectContaining({ articleNum: "第3条", decision: "modified" }),
+      "第3条",
+      expect.objectContaining({ decision: "modified" }),
     );
   });
 
   test("レビュー記事のメモを更新する", async () => {
     mockGetReviewArticles.mockResolvedValueOnce(SAMPLE_ARTICLES);
-    mockSaveReviewArticle.mockResolvedValueOnce(undefined);
+    mockUpdateReviewArticle.mockResolvedValueOnce(undefined);
 
     const request = createJsonRequest(`/api/review/${PROJECT_ID}`, "PATCH", {
       articleNum: "第3条",
@@ -166,7 +173,7 @@ describe("PATCH /api/review/[projectId]", () => {
 
   test("レビュー記事の draft を更新する", async () => {
     mockGetReviewArticles.mockResolvedValueOnce(SAMPLE_ARTICLES);
-    mockSaveReviewArticle.mockResolvedValueOnce(undefined);
+    mockUpdateReviewArticle.mockResolvedValueOnce(undefined);
 
     const request = createJsonRequest(`/api/review/${PROJECT_ID}`, "PATCH", {
       articleNum: "第3条",
@@ -257,7 +264,7 @@ describe("POST /api/review/[projectId]/decide", () => {
       }),
     ];
     mockGetReviewArticles.mockResolvedValueOnce(articles);
-    mockSaveReviewArticle.mockResolvedValueOnce(undefined);
+    mockUpdateReviewArticle.mockResolvedValueOnce(undefined);
 
     const request = createJsonRequest(
       `/api/review/${PROJECT_ID}/decide`,
@@ -273,9 +280,76 @@ describe("POST /api/review/[projectId]/decide", () => {
     expect(response.status).toBe(200);
     expect(body.decision).toBe("adopted");
     expect(body.articleNum).toBe("第3条");
-    expect(mockSaveReviewArticle).toHaveBeenCalledWith(
+    expect(mockUpdateReviewArticle).toHaveBeenCalledWith(
       PROJECT_ID,
+      "第3条",
       expect.objectContaining({ decision: "adopted" }),
+    );
+  });
+
+  test("KEEP_CURRENT イベントで条文を現行維持状態にする", async () => {
+    const articles = [
+      createMockReviewArticle({
+        projectId: PROJECT_ID,
+        articleNum: "第3条",
+        decision: null,
+        draft: "改定案テキスト",
+      }),
+    ];
+    mockGetReviewArticles.mockResolvedValueOnce(articles);
+    mockUpdateReviewArticle.mockResolvedValueOnce(undefined);
+
+    const request = createJsonRequest(
+      `/api/review/${PROJECT_ID}/decide`,
+      "POST",
+      {
+        articleNum: "第3条",
+        event: { type: "KEEP_CURRENT" },
+      },
+    );
+    const response = await POST(request, CONTEXT);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.decision).toBe("keep-current");
+    expect(body.articleNum).toBe("第3条");
+    expect(mockUpdateReviewArticle).toHaveBeenCalledWith(
+      PROJECT_ID,
+      "第3条",
+      expect.objectContaining({ decision: "keep-current" }),
+    );
+  });
+
+  test("ADOPT_MANAGEMENT イベントで条文を管理会社案採用状態にする", async () => {
+    const articles = [
+      createMockReviewArticle({
+        projectId: PROJECT_ID,
+        articleNum: "第3条",
+        decision: null,
+        draft: "改定案テキスト",
+      }),
+    ];
+    mockGetReviewArticles.mockResolvedValueOnce(articles);
+    mockUpdateReviewArticle.mockResolvedValueOnce(undefined);
+
+    const request = createJsonRequest(
+      `/api/review/${PROJECT_ID}/decide`,
+      "POST",
+      {
+        articleNum: "第3条",
+        event: { type: "ADOPT_MANAGEMENT" },
+      },
+    );
+    const response = await POST(request, CONTEXT);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.decision).toBe("adopt-management");
+    expect(body.articleNum).toBe("第3条");
+    expect(mockUpdateReviewArticle).toHaveBeenCalledWith(
+      PROJECT_ID,
+      "第3条",
+      expect.objectContaining({ decision: "adopt-management" }),
     );
   });
 
@@ -289,7 +363,7 @@ describe("POST /api/review/[projectId]/decide", () => {
       }),
     ];
     mockGetReviewArticles.mockResolvedValueOnce(articles);
-    mockSaveReviewArticle.mockResolvedValueOnce(undefined);
+    mockUpdateReviewArticle.mockResolvedValueOnce(undefined);
 
     const request = createJsonRequest(
       `/api/review/${PROJECT_ID}/decide`,
@@ -322,7 +396,7 @@ describe("POST /api/review/[projectId]/decide", () => {
       }),
     ];
     mockGetReviewArticles.mockResolvedValueOnce(articles);
-    mockSaveReviewArticle.mockResolvedValueOnce(undefined);
+    mockUpdateReviewArticle.mockResolvedValueOnce(undefined);
 
     const request = createJsonRequest(
       `/api/review/${PROJECT_ID}/decide`,
@@ -349,7 +423,7 @@ describe("POST /api/review/[projectId]/decide", () => {
       }),
     ];
     mockGetReviewArticles.mockResolvedValueOnce(articles);
-    mockSaveReviewArticle.mockResolvedValueOnce(undefined);
+    mockUpdateReviewArticle.mockResolvedValueOnce(undefined);
 
     const request = createJsonRequest(
       `/api/review/${PROJECT_ID}/decide`,

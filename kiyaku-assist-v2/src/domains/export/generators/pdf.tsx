@@ -17,9 +17,11 @@ import type {
 } from "@/domains/export/types";
 import {
   applyExportFilter,
+  applySortOrder,
   getDecisionLabel,
   getImportanceLabel,
   groupExportArticlesByChapter,
+  groupByPriorityAndSemanticGroup,
 } from "@/domains/export/presentation";
 
 const PDF_FONT_FAMILY = "ExportJapanese";
@@ -309,6 +311,173 @@ function DiffLegend() {
 
 // ---------- PDF ドキュメント ----------
 
+/** 個別条文の PDF ブロック */
+function ArticleBlock({ article }: { article: ExportArticle }) {
+  return (
+    <View
+      style={styles.articleBlock}
+      wrap
+    >
+      <Text style={styles.articleTitle}>{article.articleNum}</Text>
+
+      <View style={styles.metaTable}>
+        {[
+          ["重要度", getImportanceLabel(article.importance)],
+          ["判定", getDecisionLabel(article.decision)],
+          ["準拠", article.baseRef],
+        ].map(([label, value], index, rows) => (
+          <View
+            key={`${article.articleNum}-${label}`}
+            style={
+              index === rows.length - 1
+                ? [styles.metaRow, { borderBottomWidth: 0 }]
+                : styles.metaRow
+            }
+          >
+            <Text style={styles.metaLabel}>{label}</Text>
+            <Text style={styles.metaValue}>{value}</Text>
+          </View>
+        ))}
+      </View>
+
+      {article.original ? (
+        <View>
+          <Text style={styles.sectionTitle}>
+            新旧対照表（変更箇所ハイライト）
+          </Text>
+          <View style={styles.compareTable}>
+            <View style={styles.compareHeader}>
+              <Text style={styles.compareCell}>現行規約</Text>
+              <Text style={styles.compareCellLast}>改定案</Text>
+            </View>
+            <View style={styles.compareBody}>
+              <OriginalDiffText
+                original={article.original}
+                draft={article.draft}
+              />
+              <DraftDiffText
+                original={article.original}
+                draft={article.draft}
+              />
+            </View>
+          </View>
+        </View>
+      ) : (
+        <View>
+          <Text style={styles.sectionTitle}>
+            改定案（新規追加）
+          </Text>
+          <Text
+            style={[styles.paragraph, diffStyles.added]}
+          >
+            {article.draft}
+          </Text>
+        </View>
+      )}
+
+      <Text style={styles.paragraph}>
+        <Text style={styles.paragraphLabel}>要約: </Text>
+        {article.summary}
+      </Text>
+      <Text style={styles.paragraph}>
+        <Text style={styles.paragraphLabel}>解説: </Text>
+        {article.explanation}
+      </Text>
+
+      {/* 判断支援情報 */}
+      {(article.impactOnResidents || article.riskIfUnchanged || article.transitionalMeasure || article.standardRuleComparison || (article.relatedLawRefs && article.relatedLawRefs.length > 0)) && (
+        <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: "#e5e7eb" }}>
+          <Text style={[styles.sectionTitle, { fontSize: 9 }]}>判断支援情報</Text>
+          {article.impactOnResidents ? (
+            <Text style={[styles.paragraph, { fontSize: 9 }]}>
+              <Text style={styles.paragraphLabel}>住民生活への影響: </Text>
+              {article.impactOnResidents}
+            </Text>
+          ) : null}
+          {article.riskIfUnchanged ? (
+            <Text style={[styles.paragraph, { fontSize: 9 }]}>
+              <Text style={styles.paragraphLabel}>変更しなかった場合のリスク: </Text>
+              {article.riskIfUnchanged}
+            </Text>
+          ) : null}
+          {article.transitionalMeasure ? (
+            <Text style={[styles.paragraph, { fontSize: 9 }]}>
+              <Text style={styles.paragraphLabel}>経過措置: </Text>
+              {article.transitionalMeasure}
+            </Text>
+          ) : null}
+          {article.standardRuleComparison ? (
+            <Text style={[styles.paragraph, { fontSize: 9 }]}>
+              <Text style={styles.paragraphLabel}>標準管理規約との対比: </Text>
+              {article.standardRuleComparison}
+            </Text>
+          ) : null}
+          {article.relatedLawRefs && article.relatedLawRefs.length > 0 ? (
+            <Text style={[styles.paragraph, { fontSize: 9 }]}>
+              <Text style={styles.paragraphLabel}>根拠法令: </Text>
+              {article.relatedLawRefs.join("、")}
+            </Text>
+          ) : null}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** 優先度ベースの PDF コンテンツ */
+function PriorityContent({ articles }: { articles: ExportArticle[] }) {
+  const sections = groupByPriorityAndSemanticGroup(articles);
+
+  return (
+    <>
+      {sections.map((section) => (
+        <View key={section.importance} wrap>
+          <Text style={styles.chapterTitle}>{section.importanceLabel}</Text>
+
+          {section.semanticGroups.map((sg) => (
+            <View key={sg.groupId} wrap>
+              <Text style={[styles.sectionTitle, { fontSize: 12, marginBottom: 8, marginTop: 6 }]}>
+                {sg.groupLabel}
+              </Text>
+
+              {sg.articles.map((article) => (
+                <ArticleBlock
+                  key={`${section.importance}-${sg.groupId}-${article.articleNum}`}
+                  article={article}
+                />
+              ))}
+            </View>
+          ))}
+        </View>
+      ))}
+    </>
+  );
+}
+
+/** 章番号ベースの PDF コンテンツ */
+function ChapterContent({ articles }: { articles: ExportArticle[] }) {
+  const chapters = groupExportArticlesByChapter(articles);
+
+  return (
+    <>
+      {chapters.map((chapter) => (
+        <View key={chapter.chapter} wrap>
+          <Text style={styles.chapterTitle}>
+            第{chapter.chapter}章 {chapter.chapterTitle}
+          </Text>
+
+          {chapter.articles.map((article) => (
+            <ArticleBlock
+              key={`${chapter.chapter}-${article.articleNum}`}
+              article={article}
+            />
+          ))}
+        </View>
+      ))}
+    </>
+  );
+}
+
 function PdfDocument({
   articles,
   options,
@@ -316,8 +485,8 @@ function PdfDocument({
   articles: ExportArticle[];
   options: ExportOptions;
 }) {
-  const chapters = groupExportArticlesByChapter(articles);
   const generatedAt = formatDate(options);
+  const sortOrder = options.sortOrder ?? "priority";
 
   return (
     <Document>
@@ -333,124 +502,11 @@ function PdfDocument({
         {/* 差分の凡例 */}
         <DiffLegend />
 
-        {chapters.map((chapter) => (
-          <View key={chapter.chapter} wrap>
-            <Text style={styles.chapterTitle}>
-              第{chapter.chapter}章 {chapter.chapterTitle}
-            </Text>
-
-            {chapter.articles.map((article) => (
-              <View
-                key={`${chapter.chapter}-${article.articleNum}`}
-                style={styles.articleBlock}
-                wrap
-              >
-                <Text style={styles.articleTitle}>{article.articleNum}</Text>
-
-                <View style={styles.metaTable}>
-                  {[
-                    ["重要度", getImportanceLabel(article.importance)],
-                    ["判定", getDecisionLabel(article.decision)],
-                    ["準拠", article.baseRef],
-                  ].map(([label, value], index, rows) => (
-                    <View
-                      key={`${article.articleNum}-${label}`}
-                      style={
-                        index === rows.length - 1
-                          ? [styles.metaRow, { borderBottomWidth: 0 }]
-                          : styles.metaRow
-                      }
-                    >
-                      <Text style={styles.metaLabel}>{label}</Text>
-                      <Text style={styles.metaValue}>{value}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                {article.original ? (
-                  <View>
-                    <Text style={styles.sectionTitle}>
-                      新旧対照表（変更箇所ハイライト）
-                    </Text>
-                    <View style={styles.compareTable}>
-                      <View style={styles.compareHeader}>
-                        <Text style={styles.compareCell}>現行規約</Text>
-                        <Text style={styles.compareCellLast}>改定案</Text>
-                      </View>
-                      <View style={styles.compareBody}>
-                        <OriginalDiffText
-                          original={article.original}
-                          draft={article.draft}
-                        />
-                        <DraftDiffText
-                          original={article.original}
-                          draft={article.draft}
-                        />
-                      </View>
-                    </View>
-                  </View>
-                ) : (
-                  <View>
-                    <Text style={styles.sectionTitle}>
-                      改定案（新規追加）
-                    </Text>
-                    <Text
-                      style={[styles.paragraph, diffStyles.added]}
-                    >
-                      {article.draft}
-                    </Text>
-                  </View>
-                )}
-
-                <Text style={styles.paragraph}>
-                  <Text style={styles.paragraphLabel}>要約: </Text>
-                  {article.summary}
-                </Text>
-                <Text style={styles.paragraph}>
-                  <Text style={styles.paragraphLabel}>解説: </Text>
-                  {article.explanation}
-                </Text>
-
-                {/* 判断支援情報 */}
-                {(article.impactOnResidents || article.riskIfUnchanged || article.transitionalMeasure || article.standardRuleComparison || (article.relatedLawRefs && article.relatedLawRefs.length > 0)) && (
-                  <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: "#e5e7eb" }}>
-                    <Text style={[styles.sectionTitle, { fontSize: 9 }]}>判断支援情報</Text>
-                    {article.impactOnResidents ? (
-                      <Text style={[styles.paragraph, { fontSize: 9 }]}>
-                        <Text style={styles.paragraphLabel}>住民生活への影響: </Text>
-                        {article.impactOnResidents}
-                      </Text>
-                    ) : null}
-                    {article.riskIfUnchanged ? (
-                      <Text style={[styles.paragraph, { fontSize: 9 }]}>
-                        <Text style={styles.paragraphLabel}>変更しなかった場合のリスク: </Text>
-                        {article.riskIfUnchanged}
-                      </Text>
-                    ) : null}
-                    {article.transitionalMeasure ? (
-                      <Text style={[styles.paragraph, { fontSize: 9 }]}>
-                        <Text style={styles.paragraphLabel}>経過措置: </Text>
-                        {article.transitionalMeasure}
-                      </Text>
-                    ) : null}
-                    {article.standardRuleComparison ? (
-                      <Text style={[styles.paragraph, { fontSize: 9 }]}>
-                        <Text style={styles.paragraphLabel}>標準管理規約との対比: </Text>
-                        {article.standardRuleComparison}
-                      </Text>
-                    ) : null}
-                    {article.relatedLawRefs && article.relatedLawRefs.length > 0 ? (
-                      <Text style={[styles.paragraph, { fontSize: 9 }]}>
-                        <Text style={styles.paragraphLabel}>根拠法令: </Text>
-                        {article.relatedLawRefs.join("、")}
-                      </Text>
-                    ) : null}
-                  </View>
-                )}
-              </View>
-            ))}
-          </View>
-        ))}
+        {sortOrder === "priority" ? (
+          <PriorityContent articles={articles} />
+        ) : (
+          <ChapterContent articles={articles} />
+        )}
 
         <View style={styles.divider} />
         <Text style={styles.footer}>
@@ -472,8 +528,9 @@ export class PdfGenerator implements ExportGenerator {
     ensurePdfFontRegistered();
 
     const filtered = applyExportFilter(articles, options.filter);
+    const sorted = applySortOrder(filtered, options.sortOrder);
     const content = await renderToBuffer(
-      <PdfDocument articles={filtered} options={options} />,
+      <PdfDocument articles={sorted} options={options} />,
     );
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 

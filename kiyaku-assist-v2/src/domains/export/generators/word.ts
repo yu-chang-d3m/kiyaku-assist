@@ -17,9 +17,11 @@ import type { ExportArticle, ExportResult } from "@/domains/export/types";
 import type { EnhancedExportOptions } from "@/domains/export/export-types";
 import {
   applyExportFilter,
+  applySortOrder,
   getDecisionLabel,
   getImportanceLabel,
   groupExportArticlesByChapter,
+  groupByPriorityAndSemanticGroup,
 } from "@/domains/export/presentation";
 
 export class WordGenerator {
@@ -28,7 +30,8 @@ export class WordGenerator {
     options: EnhancedExportOptions,
   ): Promise<ExportResult> {
     const filtered = applyExportFilter(articles, options.filter);
-    const doc = this.buildDocument(filtered, options);
+    const sorted = applySortOrder(filtered, options.sortOrder);
+    const doc = this.buildDocument(sorted, options);
     const buffer = await Packer.toBuffer(doc);
     const timestamp = new Date()
       .toISOString()
@@ -61,18 +64,49 @@ export class WordGenerator {
     }
 
     // 新旧対照表
-    const chapters = groupExportArticlesByChapter(articles);
-    for (const chapter of chapters) {
-      sections.push(
-        new Paragraph({
-          text: `第${chapter.chapter}章 ${chapter.chapterTitle}`,
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 400, after: 200 },
-        }),
-      );
+    const sortOrder = options.sortOrder ?? "priority";
 
-      for (const article of chapter.articles) {
-        sections.push(...this.buildArticleSection(article));
+    if (sortOrder === "priority") {
+      // 優先度 → 意味グループ別構成
+      const prioritySections = groupByPriorityAndSemanticGroup(articles);
+      for (const pSection of prioritySections) {
+        sections.push(
+          new Paragraph({
+            text: pSection.importanceLabel,
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 400, after: 200 },
+          }),
+        );
+
+        for (const sg of pSection.semanticGroups) {
+          sections.push(
+            new Paragraph({
+              text: sg.groupLabel,
+              heading: HeadingLevel.HEADING_3,
+              spacing: { before: 300, after: 150 },
+            }),
+          );
+
+          for (const article of sg.articles) {
+            sections.push(...this.buildArticleSection(article));
+          }
+        }
+      }
+    } else {
+      // 章番号順（従来の動作）
+      const chapters = groupExportArticlesByChapter(articles);
+      for (const chapter of chapters) {
+        sections.push(
+          new Paragraph({
+            text: `第${chapter.chapter}章 ${chapter.chapterTitle}`,
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 400, after: 200 },
+          }),
+        );
+
+        for (const article of chapter.articles) {
+          sections.push(...this.buildArticleSection(article));
+        }
       }
     }
 

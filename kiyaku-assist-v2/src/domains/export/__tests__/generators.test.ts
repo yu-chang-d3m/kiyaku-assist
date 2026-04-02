@@ -18,6 +18,7 @@ const SAMPLE_ARTICLES: ExportArticle[] = [
     importance: "mandatory",
     decision: "adopted",
     baseRef: "標準管理規約第3条",
+    semanticGroup: "general",
   },
   {
     chapter: 1,
@@ -30,6 +31,7 @@ const SAMPLE_ARTICLES: ExportArticle[] = [
     importance: "recommended",
     decision: "modified",
     baseRef: "標準管理規約第18条の2",
+    semanticGroup: "lifestyle",
   },
   {
     chapter: 6,
@@ -42,6 +44,7 @@ const SAMPLE_ARTICLES: ExportArticle[] = [
     importance: "mandatory",
     decision: "pending",
     baseRef: "改正区分所有法第39条第3項",
+    semanticGroup: "digitalization",
   },
 ];
 
@@ -51,21 +54,32 @@ const DEFAULT_OPTIONS: ExportOptions = {
   includeTimestamp: false,
 };
 
+const CHAPTER_ORDER_OPTIONS: ExportOptions = {
+  ...DEFAULT_OPTIONS,
+  sortOrder: "chapter",
+};
+
 // ---------- Markdown ジェネレーター ----------
 
 describe("MarkdownGenerator", () => {
   const generator = new MarkdownGenerator();
 
-  test("Markdown を正しく生成する", () => {
+  test("デフォルト（優先度順）で Markdown を正しく生成する", () => {
     const result = generator.generate(SAMPLE_ARTICLES, DEFAULT_OPTIONS);
 
     expect(result.content).toContain("# テストマンション 管理規約改定案");
     expect(result.content).toContain("対象条文数: 3 条");
-    expect(result.content).toContain("## 第1章 総則");
-    expect(result.content).toContain("### 第3条");
-    expect(result.content).toContain("### 第5条");
-    expect(result.content).toContain("## 第6章 管理組合");
-    expect(result.content).toContain("### 第47条");
+    // 優先度順: mandatory → recommended の順にセクションヘッダー
+    expect(result.content).toContain("## 法的必須の改正事項");
+    expect(result.content).toContain("## 推奨される改正事項");
+    // 意味グループのサブヘッダー
+    expect(result.content).toContain("### 総則・定義");
+    expect(result.content).toContain("### 電子化対応");
+    expect(result.content).toContain("### 生活利便性");
+    // 条文
+    expect(result.content).toContain("#### 第3条");
+    expect(result.content).toContain("#### 第5条");
+    expect(result.content).toContain("#### 第47条");
     expect(result.content).toContain("必須");
     expect(result.content).toContain("採用");
     expect(result.content).toContain("修正採用");
@@ -74,6 +88,27 @@ describe("MarkdownGenerator", () => {
     expect(result.mimeType).toBe("text/markdown; charset=utf-8");
     expect(result.filename).toContain("テストマンション_規約改定案_");
     expect(result.filename).toMatch(/\.md$/);
+  });
+
+  test("章番号順で Markdown を生成する", () => {
+    const result = generator.generate(SAMPLE_ARTICLES, CHAPTER_ORDER_OPTIONS);
+
+    expect(result.content).toContain("## 第1章 総則");
+    expect(result.content).toContain("## 第6章 管理組合");
+    // 優先度セクションヘッダーは含まない
+    expect(result.content).not.toContain("法的必須の改正事項");
+    expect(result.content).not.toContain("推奨される改正事項");
+  });
+
+  test("優先度順のソート: mandatory が recommended より先に出現する", () => {
+    const result = generator.generate(SAMPLE_ARTICLES, DEFAULT_OPTIONS);
+    const content = result.content as string;
+
+    const mandatoryIdx = content.indexOf("## 法的必須の改正事項");
+    const recommendedIdx = content.indexOf("## 推奨される改正事項");
+    expect(mandatoryIdx).toBeGreaterThan(-1);
+    expect(recommendedIdx).toBeGreaterThan(-1);
+    expect(mandatoryIdx).toBeLessThan(recommendedIdx);
   });
 
   test("タイムスタンプを含めることができる", () => {
@@ -92,7 +127,7 @@ describe("MarkdownGenerator", () => {
   test("現行規約がある場合は新旧対照表を表示する", () => {
     const result = generator.generate(SAMPLE_ARTICLES, DEFAULT_OPTIONS);
 
-    expect(result.content).toContain("#### 新旧対照表");
+    expect(result.content).toContain("##### 新旧対照表");
     expect(result.content).toContain("| 現行規約 | 改定案 |");
   });
 
@@ -268,5 +303,47 @@ describe("PdfGenerator", () => {
     } finally {
       await pdf.destroy().catch(() => {});
     }
+  });
+});
+
+// ---------- sortByPriority 単体テスト ----------
+
+describe("sortByPriority", () => {
+  // presentation.ts からインポート
+  test("importance → semanticGroup → issueGroup → chapter の順でソートされる", async () => {
+    const { sortByPriority } = await import("@/domains/export/presentation");
+
+    const articles: ExportArticle[] = [
+      {
+        ...SAMPLE_ARTICLES[1], // recommended, lifestyle
+        articleNum: "第5条",
+      },
+      {
+        ...SAMPLE_ARTICLES[0], // mandatory, general
+        articleNum: "第3条",
+      },
+      {
+        ...SAMPLE_ARTICLES[2], // mandatory, digitalization
+        articleNum: "第47条",
+      },
+    ];
+
+    const sorted = sortByPriority(articles);
+
+    // mandatory が先（digitalization priority=1, general priority=4）
+    expect(sorted[0].articleNum).toBe("第47条"); // mandatory + digitalization(1)
+    expect(sorted[1].articleNum).toBe("第3条");  // mandatory + general(4)
+    expect(sorted[2].articleNum).toBe("第5条");  // recommended + lifestyle(10)
+  });
+
+  test("元の配列を変更しない（非破壊的ソート）", async () => {
+    const { sortByPriority } = await import("@/domains/export/presentation");
+
+    const original = [...SAMPLE_ARTICLES];
+    sortByPriority(SAMPLE_ARTICLES);
+
+    expect(SAMPLE_ARTICLES[0].articleNum).toBe(original[0].articleNum);
+    expect(SAMPLE_ARTICLES[1].articleNum).toBe(original[1].articleNum);
+    expect(SAMPLE_ARTICLES[2].articleNum).toBe(original[2].articleNum);
   });
 });

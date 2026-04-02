@@ -1,6 +1,7 @@
 import { describe, test, expect } from "vitest";
 import { MarkdownGenerator } from "@/domains/export/generators/markdown";
 import { CsvGenerator } from "@/domains/export/generators/csv";
+import { ExcelGenerator } from "@/domains/export/generators/excel";
 import { PdfGenerator } from "@/domains/export/generators/pdf";
 import type { ExportArticle, ExportOptions } from "@/domains/export/types";
 
@@ -345,5 +346,56 @@ describe("sortByPriority", () => {
     expect(SAMPLE_ARTICLES[0].articleNum).toBe(original[0].articleNum);
     expect(SAMPLE_ARTICLES[1].articleNum).toBe(original[1].articleNum);
     expect(SAMPLE_ARTICLES[2].articleNum).toBe(original[2].articleNum);
+  });
+});
+
+// ---------- Excel ジェネレーター ----------
+
+describe("ExcelGenerator", () => {
+  const generator = new ExcelGenerator();
+
+  test("xlsx バイナリを正しく生成する", async () => {
+    const result = await generator.generate(SAMPLE_ARTICLES, {
+      ...DEFAULT_OPTIONS,
+      format: "excel",
+    });
+
+    expect(result.content).toBeInstanceOf(Uint8Array);
+    expect(result.mimeType).toBe(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    expect(result.filename).toContain("テストマンション");
+    expect(result.filename).toMatch(/\.xlsx$/);
+    expect(result.articleCount).toBe(3);
+  });
+
+  test("優先度順（デフォルト）で出力される", async () => {
+    const result = await generator.generate(SAMPLE_ARTICLES, {
+      ...DEFAULT_OPTIONS,
+      format: "excel",
+    });
+
+    // xlsx バイナリが生成されていることを確認
+    expect((result.content as Uint8Array).length).toBeGreaterThan(0);
+  });
+
+  test("章番号順で出力できる", async () => {
+    const result = await generator.generate(SAMPLE_ARTICLES, {
+      ...CHAPTER_ORDER_OPTIONS,
+      format: "excel",
+    });
+
+    expect(result.articleCount).toBe(3);
+    expect((result.content as Uint8Array).length).toBeGreaterThan(0);
+  });
+
+  test("フィルタが適用される", async () => {
+    const result = await generator.generate(SAMPLE_ARTICLES, {
+      ...DEFAULT_OPTIONS,
+      format: "excel",
+      filter: { importances: ["mandatory"] },
+    });
+
+    expect(result.articleCount).toBe(2);
   });
 });

@@ -14,6 +14,7 @@ import { getReviewArticles } from "@/shared/db/server-actions";
 import {
   MarkdownGenerator,
   CsvGenerator,
+  ExcelGenerator,
   PdfGenerator,
   WordGenerator,
 } from "@/domains/export/generators";
@@ -27,7 +28,7 @@ import { verifyAuth, verifyProjectOwner } from "@/shared/api/auth";
 const exportRequestSchema = z.object({
   projectId: z.string().min(1, "プロジェクトIDは必須です"),
   condoName: z.string().min(1, "マンション名は必須です"),
-  format: z.enum(["markdown", "csv", "pdf", "word"]),
+  format: z.enum(["markdown", "csv", "excel", "pdf", "word"]),
   filter: z
     .object({
       decisions: z
@@ -52,6 +53,7 @@ const exportRequestSchema = z.object({
 const generators: Record<ExportOptions["format"], ExportGenerator> = {
   markdown: new MarkdownGenerator(),
   csv: new CsvGenerator(),
+  excel: new ExcelGenerator(),
   pdf: new PdfGenerator(),
   word: new WordGenerator() as unknown as ExportGenerator,
 };

@@ -52,7 +52,7 @@ export interface ExportOptions {
   /** マンション名 */
   condoName: string;
   /** 出力フォーマット */
-  format: "markdown" | "csv" | "pdf" | "word";
+  format: "markdown" | "csv" | "excel" | "pdf" | "word";
   /** 対象条文のフィルタ（未指定で全件） */
   filter?: ExportFilter;
   /** 生成日時を含めるか */

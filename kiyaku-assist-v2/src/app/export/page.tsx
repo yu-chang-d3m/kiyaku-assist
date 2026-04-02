@@ -99,7 +99,7 @@ interface ExportFormat {
   title: string;
   description: string;
   icon: string;
-  format: "markdown" | "csv" | "pdf" | "word";
+  format: "markdown" | "csv" | "excel" | "pdf" | "word";
   actionLabel: string;
 }
 
@@ -117,10 +117,19 @@ const EXPORT_FORMATS: ExportFormat[] = [
     actionLabel: "Markdown ダウンロード",
   },
   {
+    id: "excel",
+    title: "Excel（レビュー結果一覧）",
+    description:
+      "全条文の判断結果・改正案・メモを Excel スプレッドシートで出力します。フィルタ・ソートが容易で、理事会メンバー間の回覧・加筆に最適です。",
+    icon: "X",
+    format: "excel",
+    actionLabel: "Excel ダウンロード",
+  },
+  {
     id: "csv",
     title: "CSV（レビュー結果一覧）",
     description:
-      "各条文の判断結果（採用/修正/保留）とメモを一覧化した CSV ファイルをダウンロードします。Excel で開けます。",
+      "各条文の判断結果（採用/修正/保留）とメモを一覧化した CSV ファイルをダウンロードします。データ連携・議事録添付に便利です。",
     icon: "C",
     format: "csv",
     actionLabel: "CSV ダウンロード",
@@ -295,9 +304,10 @@ function ExportPageContent() {
       });
 
       const date = new Date().toISOString().split("T")[0];
-      const extMap: Record<string, string> = { csv: "csv", pdf: "pdf", word: "docx", markdown: "md" };
+      const extMap: Record<string, string> = { csv: "csv", excel: "xlsx", pdf: "pdf", word: "docx", markdown: "md" };
       const ext = extMap[fmt.format] ?? "md";
-      const filename = `管理規約_${fmt.format === "csv" ? "レビュー結果" : "新旧対照表"}_${date}.${ext}`;
+      const isDataExport = fmt.format === "csv" || fmt.format === "excel";
+      const filename = `管理規約_${isDataExport ? "レビュー結果" : "新旧対照表"}_${date}.${ext}`;
 
       downloadBlob(blob, filename);
       showFeedback(fmt.id, "ダウンロードを開始しました");

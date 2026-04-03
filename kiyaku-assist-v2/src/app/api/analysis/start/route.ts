@@ -26,7 +26,7 @@ const analysisRequestSchema = z.object({
     .array(
       z.object({
         articleNum: z.string().min(1, "条文番号は必須です"),
-        category: z.string().min(1, "カテゴリは必須です"),
+        category: z.string().default("その他"),
         currentText: z.string().nullable(),
       }),
     )

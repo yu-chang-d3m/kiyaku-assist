@@ -35,10 +35,10 @@ const autoGenerateSchema = z.object({
   projectId: z.string().min(1),
   mode: z.enum(["smart", "precise"]).default("smart"),
   condoContext: z.object({
-    condoName: z.string().min(1),
-    condoType: z.enum(["corporate", "non-corporate", "unknown"]),
-    unitCount: z.enum(["small", "medium", "large", "xlarge"]),
-  }),
+    condoName: z.string().default("マンション"),
+    condoType: z.enum(["corporate", "non-corporate", "unknown"]).default("unknown"),
+    unitCount: z.enum(["small", "medium", "large", "xlarge"]).default("medium"),
+  }).default({ condoName: "マンション", condoType: "unknown", unitCount: "medium" }),
 });
 
 export async function POST(request: NextRequest) {

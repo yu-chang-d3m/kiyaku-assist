@@ -16,7 +16,24 @@ import { logger } from "@/shared/observability/logger";
 
 // ---------- 検出パターン ----------
 
-/** 法的助言を求める質問のパターン */
+/**
+ * 明確な個別紛争パターン（blocked: AI回答を生成しない）
+ *
+ * 訴訟提起・損害賠償請求・調停申立て等、
+ * 具体的な法的手続きの実行を求める質問を検出する。
+ */
+const BLOCKED_PATTERNS = [
+  /(?:訴え|提訴).*(?:たい|方法|手順|できますか)/,
+  /(?:損害賠償|慰謝料).*(?:請求|いくら|できますか)/,
+  /裁判.*(?:起こし|したい|手続き|費用|勝てますか)/,
+  /(?:調停|仲裁).*(?:申し立て|申立て|したい)/,
+  /(?:差止|仮処分|保全).*(?:請求|申し立て|申立て)/,
+  /(?:告訴|告発|刑事).*(?:したい|できますか|手続き)/,
+  /(?:内容証明|督促).*(?:送り|送る|出し|書き方|テンプレ|方法)/,
+  /(?:示談|和解).*(?:交渉|金額|進め方|したい)/,
+] as const;
+
+/** 法的助言を求める質問のパターン（warning: 回答を制限） */
 const LEGAL_ADVICE_PATTERNS = [
   /訴訟|訴え|裁判|提訴/,
   /弁護士に相談|法的措置|法的手段/,
@@ -29,7 +46,7 @@ const LEGAL_ADVICE_PATTERNS = [
   /内容証明|督促/,
 ] as const;
 
-/** 個別具体的な判断を求めるパターン */
+/** 個別具体的な判断を求めるパターン（warning: 回答を制限） */
 const SPECIFIC_JUDGMENT_PATTERNS = [
   /うちのマンションの場合.*(?:どうすべき|すべきですか|義務がある)/,
   /(?:勝てますか|負けますか|認められますか)/,
@@ -46,6 +63,12 @@ export const DISCLAIMER_MESSAGE = `
 法的な判断が必要な場合は、マンション管理士や弁護士等の専門家にご相談ください。
 `.trim();
 
+/** blocked 時の固定メッセージ */
+export const BLOCKED_MESSAGE =
+  "この質問は個別の法律問題に関するものと判断されました。\n\n" +
+  "本サービスでは、訴訟・損害賠償・調停等の個別紛争に関する助言は提供できません。\n" +
+  "マンション管理士や弁護士等の専門家にご相談ください。";
+
 // ---------- 公開 API ----------
 
 /**
@@ -55,10 +78,22 @@ export const DISCLAIMER_MESSAGE = `
  * @returns ガードレール判定結果
  */
 export function checkUserMessage(message: string): GuardrailResult {
-  // 法的助言パターンのチェック
+  // 1. 明確な個別紛争パターンのチェック（blocked）
+  for (const pattern of BLOCKED_PATTERNS) {
+    if (pattern.test(message)) {
+      logger.warn({ pattern: pattern.source }, "個別紛争パターンを検出 → blocked");
+      return {
+        status: "blocked",
+        reason: BLOCKED_MESSAGE,
+        legalAdviceRisk: true,
+      };
+    }
+  }
+
+  // 2. 法的助言パターンのチェック（warning）
   for (const pattern of LEGAL_ADVICE_PATTERNS) {
     if (pattern.test(message)) {
-      logger.warn({ pattern: pattern.source }, "法的助言パターンを検出");
+      logger.warn({ pattern: pattern.source }, "法的助言パターンを検出 → warning");
       return {
         status: "warning",
         reason: "法的助言に該当する可能性がある質問が検出されました",
@@ -67,10 +102,10 @@ export function checkUserMessage(message: string): GuardrailResult {
     }
   }
 
-  // 個別具体的な判断パターンのチェック
+  // 3. 個別具体的な判断パターンのチェック（warning）
   for (const pattern of SPECIFIC_JUDGMENT_PATTERNS) {
     if (pattern.test(message)) {
-      logger.warn({ pattern: pattern.source }, "個別判断パターンを検出");
+      logger.warn({ pattern: pattern.source }, "個別判断パターンを検出 → warning");
       return {
         status: "warning",
         reason: "個別具体的な法的判断を求める質問が検出されました",

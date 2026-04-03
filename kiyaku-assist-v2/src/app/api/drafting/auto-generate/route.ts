@@ -212,6 +212,7 @@ export async function POST(request: NextRequest) {
               articleNum: draft.articleNum,
               original: original.original,
               draft: draft.draft,
+              reformText: draft.draft,
               summary: draft.summary,
               explanation: draft.explanation,
               importance: draft.importance,

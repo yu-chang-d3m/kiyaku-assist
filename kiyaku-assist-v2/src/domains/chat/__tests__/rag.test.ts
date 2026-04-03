@@ -207,12 +207,12 @@ describe("RAG パイプライン — generateChatResponse", () => {
     });
 
     it("法的助言パターン検出時もシステムプロンプトに注意喚起が追加される", async () => {
-      const request = buildRequest("損害賠償請求をしたい");
+      const request = buildRequest("弁護士に相談する前に法的な見解を教えて");
       await generateChatResponse(request);
 
       const createCall = mockClaudeClient._mockCreate.mock.calls[0][0];
       expect(createCall.system).toContain(
-        "法的助言を求める意図が含まれている可能性",
+        "法的助言を求める意図が含まれています",
       );
     });
   });

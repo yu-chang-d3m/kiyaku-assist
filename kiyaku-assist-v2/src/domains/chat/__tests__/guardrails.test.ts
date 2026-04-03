@@ -4,6 +4,7 @@ import {
   checkAssistantResponse,
   buildGuardrailedSystemPrompt,
   DISCLAIMER_MESSAGE,
+  BLOCKED_MESSAGE,
 } from "@/domains/chat/guardrails";
 
 // logger のモック（テスト中にログ出力を抑制）
@@ -12,37 +13,53 @@ vi.mock("@/shared/observability/logger", () => ({
 }));
 
 describe("非弁ガードレール — checkUserMessage", () => {
-  // ========== 検知すべきケース（法的助言リクエスト）==========
+  // ========== blocked: 明確な個別紛争 ==========
 
-  describe("法的助言パターンを検知する", () => {
+  describe("個別紛争パターンを blocked にする", () => {
     test.each([
-      "滞納者に対して訴訟を起こしたい",
-      "裁判所に申し立てをする方法",
+      "滞納者に対して訴えを起こしたい",
       "損害賠償請求をしたい",
       "慰謝料をいくら請求できますか",
-      "管理費を滞納している人への法的措置を取りたい",
-      "弁護士に相談する前に知りたい",
+      "裁判を起こしたいのですが手続きを教えて",
+      "調停を申し立てたい",
       "差止請求はできますか",
       "内容証明を送りたい",
-      "仮処分の申立てについて",
+      "仮処分の申立てについて教えて",
+      "示談交渉の進め方を教えて",
+      "和解の金額はどのくらいが妥当ですか",
+      "督促状を送る方法を教えてください",
+      "この件で裁判に勝てますか",
+    ])('"%s" → blocked', (input) => {
+      const result = checkUserMessage(input);
+      expect(result.status).toBe("blocked");
+      expect(result.legalAdviceRisk).toBe(true);
+      expect(result.reason).toBe(BLOCKED_MESSAGE);
+    });
+  });
+
+  // ========== warning: 法的助言のリスクがあるが完全遮断はしない ==========
+
+  describe("法的助言パターンを warning にする", () => {
+    test.each([
+      "管理費を滞納している人への法的措置を取りたい",
+      "弁護士に相談する前に知りたい",
       "遺産分割で揉めている",
-      "和解交渉の進め方",
-      "督促状を送る方法",
-    ])('"%s" → 法的助言リクエストとして検知', (input) => {
+      "管理規約に違反した場合の罰則は",
+      "契約を無効にできますか",
+    ])('"%s" → warning', (input) => {
       const result = checkUserMessage(input);
       expect(result.legalAdviceRisk).toBe(true);
       expect(result.status).toBe("warning");
     });
   });
 
-  describe("個別判断パターンを検知する", () => {
+  describe("個別判断パターンを warning にする", () => {
     test.each([
       "うちのマンションの場合どうすべきですか",
-      "この件で裁判に勝てますか",
       "管理組合の行為は違法ですか",
       "具体的にいくら請求できますか",
       "理事長の責任を問えますか",
-    ])('"%s" → 個別判断リクエストとして検知', (input) => {
+    ])('"%s" → warning', (input) => {
       const result = checkUserMessage(input);
       expect(result.legalAdviceRisk).toBe(true);
       expect(result.status).toBe("warning");
@@ -118,5 +135,12 @@ describe("DISCLAIMER_MESSAGE", () => {
   test("免責メッセージが適切な内容を含む", () => {
     expect(DISCLAIMER_MESSAGE).toContain("情報提供ツール");
     expect(DISCLAIMER_MESSAGE).toContain("専門家");
+  });
+});
+
+describe("BLOCKED_MESSAGE", () => {
+  test("ブロック時メッセージが専門家誘導を含む", () => {
+    expect(BLOCKED_MESSAGE).toContain("個別の法律問題");
+    expect(BLOCKED_MESSAGE).toContain("マンション管理士や弁護士");
   });
 });

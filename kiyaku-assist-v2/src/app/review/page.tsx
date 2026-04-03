@@ -315,11 +315,17 @@ function ReviewPageContent() {
     setDraftLoading((p) => ({ ...p, [sid]: true }));
     setDraftErrors((p) => { const n = { ...p }; delete n[sid]; return n; });
     try {
+      const onboarding = loadOnboarding();
+      const condoContext = {
+        condoName: onboarding?.condoName ?? "マンション",
+        condoType: (onboarding?.isCorporate ?? "unknown") as "corporate" | "non-corporate" | "unknown",
+        unitCount: (onboarding?.unitCount ?? "medium") as "small" | "medium" | "large" | "xlarge",
+      };
       const r = await callDraftSingle({
         articleNum: selectedArticle.articleNum, category: selectedArticle.category,
         currentText: selectedArticle.original, gapSummary: selectedArticle.summary,
         importance: selectedArticle.importance,
-        condoContext: { condoName: "マンション", condoType: "unknown", unitCount: "medium" },
+        condoContext,
       });
       setArticles((p) => p.map((a) => a.id === sid
         ? { ...a, draft: r.draft, summary: r.summary || a.summary, explanation: r.explanation || a.explanation } : a));

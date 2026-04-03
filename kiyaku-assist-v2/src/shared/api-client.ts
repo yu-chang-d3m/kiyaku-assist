@@ -638,6 +638,8 @@ export interface ExportRequest {
   location?: string;
   /** 管理会社名（Word 表紙用） */
   managementCompany?: string;
+  /** ソート順 */
+  sortOrder?: "priority" | "chapter";
 }
 
 /**

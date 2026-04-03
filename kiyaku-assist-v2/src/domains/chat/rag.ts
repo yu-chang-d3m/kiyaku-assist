@@ -81,8 +81,14 @@ export async function generateChatResponse(
   const outputCheck = checkAssistantResponse(answer.content);
   const finalGuardrail = mergeGuardrailResults(inputCheck, outputCheck);
 
-  // ガードレール警告がある場合、免責メッセージを追加
+  // ガードレール警告がある場合、専門家誘導 + 免責メッセージを追加
   if (finalGuardrail.legalAdviceRisk) {
+    const expertAdvice =
+      "具体的な対応については、マンション管理士や弁護士にご相談ください。";
+    // AI が既に専門家相談の案内を含めていない場合のみ追加
+    if (!answer.content.includes("専門家にご相談")) {
+      answer.content += "\n\n" + expertAdvice;
+    }
     answer.content += "\n\n" + DISCLAIMER_MESSAGE;
     answer.filtered = true;
   }
@@ -132,9 +138,18 @@ async function generateAnswer(
         .join("\n\n---\n\n")
     : "（関連する資料が見つかりませんでした）";
 
-  // ガードレール警告がある場合、追加の注意を促す
+  // ガードレール警告がある場合、回答の性質を厳しく制限する
   const guardrailNote = guardrailResult.legalAdviceRisk
-    ? "\n\n⚠️ ユーザーの質問に法的助言を求める意図が含まれている可能性があります。情報提供に徹し、法的判断は避けてください。"
+    ? `
+
+## ⚠️ 法的助言リスク検出 — 回答制限モード
+ユーザーの質問に法的助言を求める意図が含まれています。以下のルールを厳守してください:
+
+1. **個別事案への具体的なアドバイスは一切行わないでください**
+2. 回答は一般的な制度・手続きの説明にとどめてください
+3. 「〜すべき」「〜できます」「〜の可能性が高い」等の断定は禁止です
+4. 回答の最後に必ず「具体的な対応については、マンション管理士や弁護士にご相談ください。」と付記してください
+5. 回答は200文字以内で簡潔にしてください`
     : "";
 
   const systemPrompt = buildGuardrailedSystemPrompt(CHAT_SYSTEM_PROMPT) + guardrailNote;

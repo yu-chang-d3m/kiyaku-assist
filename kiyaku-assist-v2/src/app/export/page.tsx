@@ -185,6 +185,7 @@ function ExportPageContent() {
     "loading"
   );
   const [feedbacks, setFeedbacks] = useState<Record<string, string>>({});
+  const [sortOrder, setSortOrder] = useState<"priority" | "chapter">("priority");
   const [exportLoading, setExportLoading] = useState<Record<string, boolean>>(
     {}
   );
@@ -301,6 +302,7 @@ function ExportPageContent() {
         includeTimestamp: true,
         location: location || undefined,
         managementCompany: managementCompany || undefined,
+        sortOrder,
       });
 
       const date = new Date().toISOString().split("T")[0];
@@ -612,6 +614,41 @@ function ExportPageContent() {
             <p>※ 最終的な規約案の決定にあたっては、マンション管理士や弁護士等の専門家にご相談ください。</p>
           </div>
         </div>
+
+        {/* ソート順の切替 */}
+        <Card className="mb-6 print:hidden">
+          <CardHeader>
+            <CardTitle className="text-base">出力順序</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="sortOrder"
+                  value="priority"
+                  checked={sortOrder === "priority"}
+                  onChange={() => setSortOrder("priority")}
+                  className="accent-primary w-4 h-4"
+                />
+                <span className="text-sm font-medium">優先度順</span>
+                <span className="text-xs text-muted-foreground">（法的必須 → 推奨 → 任意）</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="sortOrder"
+                  value="chapter"
+                  checked={sortOrder === "chapter"}
+                  onChange={() => setSortOrder("chapter")}
+                  className="accent-primary w-4 h-4"
+                />
+                <span className="text-sm font-medium">章番号順</span>
+                <span className="text-xs text-muted-foreground">（第1章 → 第2章 → ...）</span>
+              </label>
+            </div>
+          </CardContent>
+        </Card>
 
         <Separator className="mb-6 print:hidden" />
 

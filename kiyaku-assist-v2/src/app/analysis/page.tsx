@@ -212,6 +212,7 @@ function AnalysisPageContent() {
         handleStartDrafting(projectId);
       },
       onError: async (message) => {
+        console.error("[analysis] API エラー:", message);
         // 接続切れの場合: サーバー側では完了している可能性があるため Firestore を確認
         if (message.includes("接続が切れました") && projectId) {
           try {

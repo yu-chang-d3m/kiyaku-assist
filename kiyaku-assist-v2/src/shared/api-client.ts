@@ -16,7 +16,7 @@ import type {
 import type { ReviewEvent, ReviewProgress } from "@/domains/review/types";
 import type { ChatMessage, ChatResponse } from "@/domains/chat/types";
 import type { ReviewArticle, Project } from "@/shared/db/types";
-import { clearSession } from "@/shared/store";
+// clearSession は API エラー時に自動呼び出ししない（セッション全消去は過剰）
 import { getFirebaseAuth, isFirebaseConfigured } from "@/shared/db/firestore";
 
 // ---------- 共通ヘルパー ----------
@@ -57,16 +57,13 @@ async function authHeaders(
 /**
  * レスポンスの共通エラーハンドリング
  *
- * 404 の場合はプロジェクトが削除された可能性が高いため、
- * sessionStorage のセッションデータをクリアして stale な状態を解消する。
+ * エラーメッセージを throw する。セッションのクリアは行わない
+ * （ユーザーの明示的操作でのみリセットする）。
  */
 async function handleResponseError(
   res: Response,
   fallbackMessage: string,
 ): Promise<never> {
-  if (res.status === 404) {
-    clearSession();
-  }
   const err = await res.json().catch(() => ({}));
   throw new Error(
     (err as { error?: string }).error ?? fallbackMessage,
@@ -212,7 +209,7 @@ export function startAnalysis(
       });
 
       if (!res.ok) {
-        if (res.status === 404) clearSession();
+        // 404 でもセッションはクリアしない（エラー表示のみ）
         const err = await res.json().catch(() => ({}));
         callbacks.onError?.(
           (err as { error?: string }).error ?? "分析の開始に失敗しました",
@@ -290,7 +287,7 @@ export function startUnifiedAnalysis(
       });
 
       if (!res.ok) {
-        if (res.status === 404) clearSession();
+        // 404 でもセッションはクリアしない（エラー表示のみ）
         const err = await res.json().catch(() => ({}));
         callbacks.onError?.(
           (err as { error?: string }).error ?? "統合分析の開始に失敗しました",
@@ -401,7 +398,7 @@ export function startAutoGenerate(
       });
 
       if (!res.ok) {
-        if (res.status === 404) clearSession();
+        // 404 でもセッションはクリアしない（エラー表示のみ）
         const err = await res.json().catch(() => ({}));
         callbacks.onError?.(
           (err as { error?: string }).error ??
@@ -464,7 +461,7 @@ export function startDrafting(
       });
 
       if (!res.ok) {
-        if (res.status === 404) clearSession();
+        // 404 でもセッションはクリアしない（エラー表示のみ）
         const err = await res.json().catch(() => ({}));
         callbacks.onError?.(
           (err as { error?: string }).error ??
@@ -586,7 +583,7 @@ export function streamChat(
       });
 
       if (!res.ok) {
-        if (res.status === 404) clearSession();
+        // 404 でもセッションはクリアしない（エラー表示のみ）
         const err = await res.json().catch(() => ({}));
         callbacks.onError?.(
           (err as { error?: string }).error ?? "AIに接続できませんでした",

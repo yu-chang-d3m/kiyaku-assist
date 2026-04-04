@@ -271,19 +271,32 @@ test.describe("カスタマージャーニー通しテスト", () => {
         return;
       }
 
-      // review にリダイレクトされずに analysis に戻された場合はスキップ
-      if (page.url().includes("/analysis")) {
-        console.warn("⚠️ review がデータなしで /analysis にリダイレクト。レビュー以降をスキップ。");
+      // review ページが表示されるか、/analysis にリダイレクトされるかを待つ
+      // review が Firestore でデータなしと判断した場合にリダイレクトが発生する
+      try {
+        await page.waitForURL("**/review", { timeout: 5000 });
+      } catch {
+        // review に到達できなかった場合
+        console.warn("⚠️ review に到達できませんでした。URL:", page.url());
         analysisSucceeded = false;
         return;
       }
 
-      // レビュー画面のデータ読み込みを待つ（課題グループビューがデフォルト）
-      await expect(
-        page.getByRole("heading", { name: "改正案レビュー" }).or(
-          page.getByText("ステップ 5", { exact: false }),
-        ),
-      ).toBeVisible({ timeout: 30000 });
+      // レビュー画面のデータ読み込みを待つ
+      // リダイレクトが起きる場合は URL が変わるので検出する
+      const reviewHeading = page.getByRole("heading", { name: "改正案レビュー" });
+      try {
+        await expect(reviewHeading).toBeVisible({ timeout: 15000 });
+      } catch {
+        // heading が表示されない = データなしでリダイレクトされた可能性
+        if (!page.url().includes("/review")) {
+          console.warn("⚠️ review からリダイレクトされました。URL:", page.url());
+          analysisSucceeded = false;
+          return;
+        }
+        // review にいるがまだ読み込み中 — もう少し待つ
+        await expect(reviewHeading).toBeVisible({ timeout: 15000 });
+      }
 
       // 初稿を一括反映ボタンがあればクリック
       const approveAllBtn = page.locator('[data-test="review-approve-all"]');

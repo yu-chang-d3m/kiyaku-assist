@@ -53,9 +53,11 @@ export function toExportArticle(article: ReviewArticle): ExportArticle {
     riskIfUnchanged: article.riskIfUnchanged,
     transitionalMeasure: article.transitionalMeasure,
     standardRuleComparison: article.standardRuleComparison,
+    detailedBackground: article.detailedBackground,
     semanticGroup: article.semanticGroup,
     secondaryGroups: article.secondaryGroups,
     issueGroup: article.issueGroup,
+    aiRecommendation: article.aiRecommendation,
   };
 }
 
@@ -113,6 +115,19 @@ export function getDecisionLabel(
 ): string {
   if (!decision) return "未決定";
   return DECISION_LABELS[decision] ?? decision;
+}
+
+export const AI_RECOMMENDATION_LABELS: Record<string, string> = {
+  adopted: "採用",
+  modified: "修正",
+  pending: "現行維持",
+};
+
+export function getAiRecommendationLabel(
+  aiRecommendation: ExportArticle["aiRecommendation"],
+): string {
+  if (!aiRecommendation) return "";
+  return AI_RECOMMENDATION_LABELS[aiRecommendation] ?? aiRecommendation;
 }
 
 // ---------- 意味グループ別エクスポート ----------

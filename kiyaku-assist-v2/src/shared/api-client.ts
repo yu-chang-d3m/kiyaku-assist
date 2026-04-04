@@ -201,18 +201,30 @@ export function startAnalysis(
 
   (async () => {
     try {
+      const reqBody = { projectId, articles };
+      console.log("[startAnalysis] POST /api/analysis/start", {
+        projectId,
+        articleCount: articles.length,
+        firstArticle: articles[0],
+      });
+
       const res = await fetch("/api/analysis/start", {
         method: "POST",
         headers: await authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ projectId, articles }),
+        body: JSON.stringify(reqBody),
         signal: controller.signal,
       });
 
       if (!res.ok) {
-        // 404 でもセッションはクリアしない（エラー表示のみ）
         const err = await res.json().catch(() => ({}));
+        console.error("[startAnalysis] API エラー", {
+          status: res.status,
+          statusText: res.statusText,
+          error: err,
+          projectId,
+        });
         callbacks.onError?.(
-          (err as { error?: string }).error ?? "分析の開始に失敗しました",
+          (err as { error?: string }).error ?? `分析の開始に失敗しました (${res.status})`,
         );
         return;
       }
@@ -390,6 +402,12 @@ export function startAutoGenerate(
 
   (async () => {
     try {
+      console.log("[autoGenerate] POST /api/drafting/auto-generate", {
+        projectId,
+        mode,
+        condoContext,
+      });
+
       const res = await fetch("/api/drafting/auto-generate", {
         method: "POST",
         headers: await authHeaders({ "Content-Type": "application/json" }),
@@ -398,11 +416,18 @@ export function startAutoGenerate(
       });
 
       if (!res.ok) {
-        // 404 でもセッションはクリアしない（エラー表示のみ）
         const err = await res.json().catch(() => ({}));
+        console.error("[autoGenerate] API エラー", {
+          status: res.status,
+          statusText: res.statusText,
+          error: err,
+          projectId,
+          mode,
+          condoContext,
+        });
         callbacks.onError?.(
           (err as { error?: string }).error ??
-            "ドラフト自動生成の開始に失敗しました",
+            `ドラフト自動生成の開始に失敗しました (${res.status})`,
         );
         return;
       }
@@ -887,6 +912,45 @@ export async function getReviewProgress(
     { headers: await authHeaders() },
   );
   if (!res.ok) await handleResponseError(res, "レビュー進捗の取得に失敗しました");
+  return res.json();
+}
+
+// ========== Finalize ==========
+
+/** 最終確定レスポンス */
+export interface FinalizeResult {
+  success: boolean;
+  finalizedCount: number;
+}
+
+/** 最終確定エラーレスポンス（法的必須で保留の条文がある場合） */
+export interface FinalizeError {
+  error: string;
+  pendingMandatory?: string[];
+}
+
+/**
+ * POST /api/project/[id]/finalize
+ * プロジェクトの全条文を最終確定にする
+ *
+ * 法的必須で保留・未決定の条文がある場合は 400 エラーを返す。
+ */
+export async function finalizeProject(
+  projectId: string,
+): Promise<FinalizeResult> {
+  const res = await fetch(
+    `/api/project/${encodeURIComponent(projectId)}/finalize`,
+    {
+      method: "POST",
+      headers: await authHeaders({ "Content-Type": "application/json" }),
+    },
+  );
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as FinalizeError;
+    throw new Error(
+      err.error ?? "最終確定に失敗しました",
+    );
+  }
   return res.json();
 }
 

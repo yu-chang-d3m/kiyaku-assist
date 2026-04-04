@@ -39,7 +39,6 @@ import type { ReviewArticle } from "@/shared/db/types";
 import type { ReviewProgress } from "@/domains/review/types";
 import {
   loadProjectId,
-  loadReviewDecisions,
   loadOnboarding,
 } from "@/shared/store";
 import { AuthGuard } from "@/shared/auth/auth-guard";
@@ -242,18 +241,12 @@ function ExportPageContent() {
         setArticles(articlesRes.articles);
         setProgress(progressRes.progress);
 
-        // ストアから判断・メモを復元
-        const savedDecisions = loadReviewDecisions();
-        if (savedDecisions) {
-          setDecisions(savedDecisions);
-        } else {
-          // API の decision を初期値として使用
-          const d: Record<string, "adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null> = {};
-          for (const a of articlesRes.articles) {
-            if (a.id && a.decision) d[a.id] = a.decision;
-          }
-          setDecisions(d);
+        // Firestore の decision を正として初期化
+        const d: Record<string, "adopted" | "modified" | "keep-current" | "adopt-management" | "pending" | null> = {};
+        for (const a of articlesRes.articles) {
+          if (a.id && a.decision) d[a.id] = a.decision;
         }
+        setDecisions(d);
         setPhase("ready");
         // エクスポート画面到達 → step=5 を記録
         syncCurrentStep(pid, 5);

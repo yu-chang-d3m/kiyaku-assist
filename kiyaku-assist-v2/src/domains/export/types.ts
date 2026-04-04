@@ -36,12 +36,16 @@ export interface ExportArticle {
   transitionalMeasure?: string;
   /** 標準管理規約との対比説明 */
   standardRuleComparison?: string;
+  /** 詳細な改正背景（変更理由の補足） */
+  detailedBackground?: string;
   /** プライマリ意味グループ */
   semanticGroup?: string;
   /** セカンダリ意味グループ */
   secondaryGroups?: string[];
   /** 課題グループ */
   issueGroup?: string;
+  /** AI による推奨判断 */
+  aiRecommendation?: "adopted" | "modified" | "pending" | null;
 }
 
 /** ソート順 */

@@ -349,13 +349,35 @@ describe("sortByPriority", () => {
   });
 });
 
-// ---------- Excel ジェネレーター ----------
+// ---------- Excel ジェネレーター（レビュー台帳） ----------
 
-describe("ExcelGenerator", () => {
+/** レビュー台帳テスト用: issueGroup・detailedBackground・aiRecommendation 付きデータ */
+const LEDGER_ARTICLES: ExportArticle[] = [
+  {
+    ...SAMPLE_ARTICLES[0],
+    issueGroup: "管理組合法人化",
+    detailedBackground: "改正区分所有法により法人化手続きが簡素化された。",
+    aiRecommendation: "adopted",
+  },
+  {
+    ...SAMPLE_ARTICLES[1],
+    issueGroup: "生活利便性向上",
+    detailedBackground: "置き配需要の高まりに対応。",
+    aiRecommendation: "modified",
+  },
+  {
+    ...SAMPLE_ARTICLES[2],
+    issueGroup: "電子化対応",
+    detailedBackground: "電子議決権行使の法的根拠が新設された。",
+    aiRecommendation: "adopted",
+  },
+];
+
+describe("ExcelGenerator（レビュー台帳）", () => {
   const generator = new ExcelGenerator();
 
   test("xlsx バイナリを正しく生成する", async () => {
-    const result = await generator.generate(SAMPLE_ARTICLES, {
+    const result = await generator.generate(LEDGER_ARTICLES, {
       ...DEFAULT_OPTIONS,
       format: "excel",
     });
@@ -365,22 +387,64 @@ describe("ExcelGenerator", () => {
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
     expect(result.filename).toContain("テストマンション");
+    expect(result.filename).toContain("レビュー台帳");
     expect(result.filename).toMatch(/\.xlsx$/);
     expect(result.articleCount).toBe(3);
   });
 
-  test("優先度順（デフォルト）で出力される", async () => {
-    const result = await generator.generate(SAMPLE_ARTICLES, {
+  test("PRD v1.0 レビュー台帳の 14 列ヘッダーを含む", async () => {
+    const ExcelJS = await import("exceljs");
+    const result = await generator.generate(LEDGER_ARTICLES, {
       ...DEFAULT_OPTIONS,
       format: "excel",
     });
 
-    // xlsx バイナリが生成されていることを確認
-    expect((result.content as Uint8Array).length).toBeGreaterThan(0);
+    const workbook = new ExcelJS.Workbook();
+    // @ts-expect-error -- exceljs の Buffer 型定義と Node 22+ の Buffer<ArrayBufferLike> が非互換
+    await workbook.xlsx.load(result.content);
+    const ws = workbook.getWorksheet("レビュー台帳")!;
+
+    const headers = ws.getRow(1).values as (string | undefined)[];
+    // exceljs の values は 1-indexed（index 0 は undefined）
+    const headerTexts = headers.slice(1);
+
+    expect(headerTexts).toEqual([
+      "条文番号", "章名", "重要度", "課題グループ",
+      "現行条文", "AI改正案", "変更理由", "未変更リスク",
+      "AI推奨判断", "レビュー担当", "コメント", "会議結論",
+      "対応状況", "最終確定",
+    ]);
+  });
+
+  test("デフォルトソートが issueGroup → importance → chapter 順になる", async () => {
+    const ExcelJS = await import("exceljs");
+    const result = await generator.generate(LEDGER_ARTICLES, {
+      ...DEFAULT_OPTIONS,
+      format: "excel",
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    // @ts-expect-error -- exceljs の Buffer 型定義と Node 22+ の Buffer<ArrayBufferLike> が非互換
+    await workbook.xlsx.load(result.content);
+    const ws = workbook.getWorksheet("レビュー台帳")!;
+
+    // issueGroup 列（col 4）の値を取得
+    const issueGroups: string[] = [];
+    for (let r = 2; r <= 4; r++) {
+      issueGroups.push(ws.getRow(r).getCell(4).value as string);
+    }
+
+    // issueGroup の日本語ソート順:
+    // "管理組合法人化" < "生活利便性向上" < "電子化対応"
+    expect(issueGroups).toEqual([
+      "管理組合法人化",  // 第3条
+      "生活利便性向上",  // 第5条
+      "電子化対応",      // 第47条
+    ]);
   });
 
   test("章番号順で出力できる", async () => {
-    const result = await generator.generate(SAMPLE_ARTICLES, {
+    const result = await generator.generate(LEDGER_ARTICLES, {
       ...CHAPTER_ORDER_OPTIONS,
       format: "excel",
     });
@@ -389,13 +453,69 @@ describe("ExcelGenerator", () => {
     expect((result.content as Uint8Array).length).toBeGreaterThan(0);
   });
 
+  test("空欄列（レビュー担当〜最終確定）は空文字で出力される", async () => {
+    const ExcelJS = await import("exceljs");
+    const result = await generator.generate(LEDGER_ARTICLES, {
+      ...DEFAULT_OPTIONS,
+      format: "excel",
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    // @ts-expect-error -- exceljs の Buffer 型定義と Node 22+ の Buffer<ArrayBufferLike> が非互換
+    await workbook.xlsx.load(result.content);
+    const ws = workbook.getWorksheet("レビュー台帳")!;
+
+    // 行 2 の空欄列（col 10〜14）を検証
+    const row = ws.getRow(2);
+    for (let col = 10; col <= 14; col++) {
+      const val = row.getCell(col).value;
+      expect(val === "" || val === null).toBe(true);
+    }
+  });
+
+  test("detailedBackground が変更理由列に出力される", async () => {
+    const ExcelJS = await import("exceljs");
+    const result = await generator.generate(LEDGER_ARTICLES, {
+      ...DEFAULT_OPTIONS,
+      format: "excel",
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    // @ts-expect-error -- exceljs の Buffer 型定義と Node 22+ の Buffer<ArrayBufferLike> が非互換
+    await workbook.xlsx.load(result.content);
+    const ws = workbook.getWorksheet("レビュー台帳")!;
+
+    // 変更理由は col 7
+    const reasons: string[] = [];
+    for (let r = 2; r <= 4; r++) {
+      reasons.push(ws.getRow(r).getCell(7).value as string);
+    }
+    expect(reasons).toContain("改正区分所有法により法人化手続きが簡素化された。");
+    expect(reasons).toContain("置き配需要の高まりに対応。");
+  });
+
   test("フィルタが適用される", async () => {
-    const result = await generator.generate(SAMPLE_ARTICLES, {
+    const result = await generator.generate(LEDGER_ARTICLES, {
       ...DEFAULT_OPTIONS,
       format: "excel",
       filter: { importances: ["mandatory"] },
     });
 
     expect(result.articleCount).toBe(2);
+  });
+
+  test("凡例シートが含まれる", async () => {
+    const ExcelJS = await import("exceljs");
+    const result = await generator.generate(LEDGER_ARTICLES, {
+      ...DEFAULT_OPTIONS,
+      format: "excel",
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    // @ts-expect-error -- exceljs の Buffer 型定義と Node 22+ の Buffer<ArrayBufferLike> が非互換
+    await workbook.xlsx.load(result.content);
+    const legendWs = workbook.getWorksheet("凡例");
+
+    expect(legendWs).toBeDefined();
   });
 });

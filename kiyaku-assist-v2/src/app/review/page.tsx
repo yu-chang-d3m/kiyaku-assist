@@ -1,6 +1,6 @@
 "use client";
 /**
- * 条文レビュー画面（テーブルビュー + 一括操作 + AI推奨判断）
+ * 条文レビュー画面（課題グループビュー + テーブルビュー + ダッシュボード）
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -13,10 +13,9 @@ import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
 import { useAuth } from "@/shared/auth/auth-context";
 import type { StepId } from "@/shared/journey";
-import { getReviewArticles, patchReviewArticle, decideReview, callDraftSingle, startAutoGenerate, deleteReviewArticlesApi, syncCurrentStep } from "@/shared/api-client";
+import { getReviewArticles, patchReviewArticle, decideReview, callDraftSingle, startAutoGenerate, deleteReviewArticlesApi, syncCurrentStep, finalizeProject } from "@/shared/api-client";
 import type { ReviewArticle } from "@/shared/db/types";
-import type { GapAnalysisItem } from "@/domains/analysis/types";
-import { useProjectStore, loadProjectId, loadGapResults, saveReviewDecisions, loadReviewDecisions, saveReviewMemos, loadReviewMemos, loadOnboarding } from "@/shared/store";
+import { loadProjectId, loadOnboarding } from "@/shared/store";
 import { parseManagementDraft } from "@/shared/api-client";
 import { AuthGuard } from "@/shared/auth/auth-guard";
 import { ArticleDiffView } from "@/components/diff/article-diff-view";
@@ -36,7 +35,7 @@ const IMPORTANCE_ORDER: Record<string, number> = { mandatory: 0, recommended: 1,
 type Decision = "adopted" | "modified" | "keep-current" | "adopt-management" | "pending";
 type FilterType = "all" | "undecided" | "adopted" | "modified" | "keep-current" | "pending";
 type ImportanceFilter = "all" | "mandatory" | "recommended" | "optional";
-type ViewMode = "table" | "dashboard";
+type ViewMode = "issues" | "table" | "dashboard";
 
 const FILTER_OPTIONS: { value: FilterType; label: string }[] = [
   { value: "all", label: "全て" }, { value: "undecided", label: "未決定" },
@@ -100,7 +99,7 @@ function ReviewPageContent() {
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [viewMode, setViewMode] = useState<ViewMode>("issues");
   const [draftLoading, setDraftLoading] = useState<Record<string, boolean>>({});
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
   const [batchDraftPhase, setBatchDraftPhase] = useState<"idle" | "generating" | "done" | "error">("idle");
@@ -113,60 +112,36 @@ function ReviewPageContent() {
   // 管理会社案アップロード
   const [mgmtDraftState, setMgmtDraftState] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const [mgmtDraftMessage, setMgmtDraftMessage] = useState("");
+  // 最終確定
+  const [finalizeState, setFinalizeState] = useState<"idle" | "confirming" | "processing" | "done" | "error">("idle");
+  const [finalizeMessage, setFinalizeMessage] = useState("");
 
   // ---------- 初期化 ----------
-  const gapToReview = useCallback(
-    (items: GapAnalysisItem[], pid: string): ReviewArticle[] =>
-      items.map((item) => ({
-        id: item.articleNum, projectId: pid, chapter: 0, articleNum: item.articleNum,
-        original: item.currentText, draft: "", summary: item.gapSummary, explanation: item.rationale,
-        importance: item.importance, baseRef: item.standardRef, decision: null,
-        modificationHistory: [], memo: "", category: item.category,
-        // 分類情報をパススルー
-        gapType: item.gapType,
-        relatedLawRefs: item.relatedLawRefs,
-        semanticGroup: item.semanticGroup,
-        secondaryGroups: item.secondaryGroups,
-        standardArticleNum: item.standardArticleNum,
-        detailedBackground: item.detailedBackground,
-        issueGroup: item.issueGroup,
-      })),
-    [],
-  );
-
   const initialize = useCallback(async () => {
     try {
       const pid = loadProjectId() ?? "default";
-      let fetched: ReviewArticle[] = (await getReviewArticles(pid)).articles ?? [];
-      const fromFirestore = fetched.length > 0;
-
-      if (!fromFirestore) {
-        // Firestore にデータがない場合のみ sessionStorage をフォールバック
-        const gap = loadGapResults();
-        if (gap && gap.length > 0) fetched = gapToReview(gap, pid);
-        else { router.push("/analysis"); return; }
+      const { articles } = await getReviewArticles(pid);
+      if (!articles || articles.length === 0) {
+        router.push("/analysis");
+        return;
       }
-      setArticles(fetched);
+      setArticles(articles);
 
-      // Firestore から取得した場合は Firestore の decision/memo を正とする
-      // sessionStorage はフォールバック（Firestore が空の場合）でのみ使用
-      if (fromFirestore) {
-        const initD: Record<string, Decision> = {};
-        const initM: Record<string, string> = {};
-        for (const a of fetched) {
-          if (a.id && a.decision) initD[a.id] = a.decision;
-          if (a.id && a.memo) initM[a.id] = a.memo;
-        }
-        setDecisions(initD);
-        saveReviewDecisions(initD);
-        setMemos(initM);
-        saveReviewMemos(initM);
-      } else {
-        const sd = loadReviewDecisions();
-        if (sd && Object.keys(sd).length > 0) { setDecisions(sd); }
-        const sm = loadReviewMemos();
-        if (sm && Object.keys(sm).length > 0) { setMemos(sm); }
+      // Firestore の decision/memo を正として初期化
+      const initD: Record<string, Decision> = {};
+      const initM: Record<string, string> = {};
+      for (const a of articles) {
+        if (a.id && a.decision) initD[a.id] = a.decision;
+        if (a.id && a.memo) initM[a.id] = a.memo;
       }
+      setDecisions(initD);
+      setMemos(initM);
+
+      // 全条文が確定済みなら finalizeState を "done" に設定
+      if (articles.every((a) => a.isFinalized)) {
+        setFinalizeState("done");
+      }
+
       setPhase("ready");
       // レビュー画面到達 → step=4 を記録
       if (pid && pid !== "default") syncCurrentStep(pid, 4);
@@ -175,7 +150,7 @@ function ReviewPageContent() {
       setErrorMessage(err instanceof Error ? err.message : "データの読み込みに失敗しました");
       setPhase("error");
     }
-  }, [router, gapToReview]);
+  }, [router]);
 
   useEffect(() => { if (initDone.current) return; initDone.current = true; initialize(); }, [initialize]);
 
@@ -234,7 +209,6 @@ function ReviewPageContent() {
       !confirm("この項目は法改正への対応として必須です。\n保留にすると、改正後の規約が法的に不完全になるリスクがあります。\nそれでも保留にしますか？")) return;
     const next = { ...decisions, [article.id]: decision };
     setDecisions(next);
-    saveReviewDecisions(next);
     const pid = loadProjectId();
     if (pid) {
       try { await decideReview(pid, article.articleNum, buildEvent(decision, article.draft)); }
@@ -248,7 +222,6 @@ function ReviewPageContent() {
     const next = { ...decisions };
     for (const a of targets) next[a.id!] = getAiRec(a);
     setDecisions(next);
-    saveReviewDecisions(next);
     const pid = loadProjectId();
     if (pid) {
       for (const a of targets) {
@@ -258,13 +231,41 @@ function ReviewPageContent() {
     }
   }
 
+  async function handleFinalize() {
+    if (finalizeState === "done" || finalizeState === "processing") return;
+    // 確定済みの場合に再確定する場合も確認ダイアログを出す
+    const message = finalizeState === "idle"
+      ? "全条文の判断を最終確定します。確定後も修正は可能ですが、確認ダイアログが表示されます。よろしいですか？"
+      : "全条文の判断を最終確定します。確定後も修正は可能ですが、確認ダイアログが表示されます。よろしいですか？";
+    if (!confirm(message)) return;
+
+    setFinalizeState("processing");
+    setFinalizeMessage("");
+    const pid = loadProjectId();
+    if (!pid) {
+      setFinalizeState("error");
+      setFinalizeMessage("プロジェクト ID が見つかりません");
+      return;
+    }
+
+    try {
+      const result = await finalizeProject(pid);
+      setFinalizeState("done");
+      setFinalizeMessage(`${result.finalizedCount} 件の条文を最終確定しました`);
+      // 3秒後にメッセージをクリア
+      setTimeout(() => setFinalizeMessage(""), 5000);
+    } catch (err) {
+      setFinalizeState("error");
+      setFinalizeMessage(err instanceof Error ? err.message : "最終確定に失敗しました");
+    }
+  }
+
   async function handleBulkAdopt() {
     if (checkedIds.size === 0) return;
     const next = { ...decisions };
     const targets = articles.filter((a) => a.id && checkedIds.has(a.id));
     for (const a of targets) next[a.id!] = "adopted";
     setDecisions(next);
-    saveReviewDecisions(next);
     setCheckedIds(new Set());
     const pid = loadProjectId();
     if (pid) {
@@ -278,7 +279,7 @@ function ReviewPageContent() {
     if (!selectedArticle?.id) return;
     const articleNum = selectedArticle.articleNum;
     const next = { ...memos, [selectedArticle.id]: value };
-    setMemos(next); saveReviewMemos(next);
+    setMemos(next);
 
     // デバウンス付き Firestore 保存（1秒後に実行）
     if (memoDebounceRef.current) clearTimeout(memoDebounceRef.current);
@@ -392,8 +393,6 @@ function ReviewPageContent() {
       for (const id of checkedIds) { delete nextD[id]; delete nextM[id]; }
       setDecisions(nextD);
       setMemos(nextM);
-      saveReviewDecisions(nextD);
-      saveReviewMemos(nextM);
       setCheckedIds(new Set());
       setSelectedId(null);
     } catch (err) {
@@ -519,6 +518,13 @@ function ReviewPageContent() {
           <div className="flex gap-1">
             <Button
               size="sm"
+              variant={viewMode === "issues" ? "default" : "outline"}
+              onClick={() => setViewMode("issues")}
+            >
+              課題グループ
+            </Button>
+            <Button
+              size="sm"
               variant={viewMode === "table" ? "default" : "outline"}
               onClick={() => setViewMode("table")}
             >
@@ -562,6 +568,126 @@ function ReviewPageContent() {
           />
         )}
 
+        {/* 課題グループモード */}
+        {viewMode === "issues" && (<>
+          {/* 一括操作バー */}
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <Button size="sm" variant="outline" onClick={handleApproveAllAi} data-test="review-approve-all-issues">
+              初稿を一括反映
+            </Button>
+            <Button
+              size="sm"
+              variant={undraftedCount > 0 ? "default" : "outline"}
+              onClick={handleBatchDraftGenerate}
+              disabled={batchDraftPhase === "generating" || undraftedCount === 0}
+            >
+              {batchDraftPhase === "generating"
+                ? `生成中 (${batchDraftProgress}/${batchDraftTotal})`
+                : undraftedCount > 0
+                  ? `一括生成 (${undraftedCount}件)`
+                  : "全生成済み"}
+            </Button>
+          </div>
+          <IssueGroupView
+            articles={filteredArticles}
+            decisions={decisions}
+            selectedId={selectedId}
+            onArticleClick={(aid) => setSelectedId(selectedId === aid ? null : aid)}
+          />
+          {/* 詳細パネル（課題グループモードでも選択時に展開） */}
+          {selectedArticle && (
+            <Card className="mb-6 mt-4">
+              <CardContent className="pt-6 space-y-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{selectedArticle.articleNum}{selectedArticle.category && `（${selectedArticle.category}）`}</span>
+                  <Badge className={IMPORTANCE_STYLE[selectedArticle.importance] ?? IMPORTANCE_STYLE.optional}>{IMPORTANCE_LABEL[selectedArticle.importance] ?? "任意"}</Badge>
+                </div>
+                {/* 要約 */}
+                <div>
+                  <p className="text-sm font-medium mb-1">何が変わる？</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.summary}</p>
+                </div>
+                {/* 比較ビュー */}
+                {selectedArticle.reformText && selectedArticle.managementDraft ? (
+                  <ThreeColumnView
+                    original={selectedArticle.original}
+                    managementDraft={selectedArticle.managementDraft}
+                    reformText={selectedArticle.reformText}
+                    semanticGroup={selectedArticle.semanticGroup}
+                    issueGroup={selectedArticle.issueGroup}
+                    detailedBackground={selectedArticle.detailedBackground}
+                    impactOnResidents={selectedArticle.impactOnResidents}
+                    riskIfUnchanged={selectedArticle.riskIfUnchanged}
+                    transitionalMeasure={selectedArticle.transitionalMeasure}
+                  />
+                ) : selectedArticle.reformText ? (
+                  <TwoColumnView
+                    original={selectedArticle.original}
+                    reformText={selectedArticle.reformText}
+                    semanticGroup={selectedArticle.semanticGroup}
+                    issueGroup={selectedArticle.issueGroup}
+                    detailedBackground={selectedArticle.detailedBackground}
+                    impactOnResidents={selectedArticle.impactOnResidents}
+                    riskIfUnchanged={selectedArticle.riskIfUnchanged}
+                    transitionalMeasure={selectedArticle.transitionalMeasure}
+                  />
+                ) : (
+                  <ArticleDiffView
+                    original={selectedArticle.original}
+                    draft={currentDraftText}
+                    onDraftEdit={handleDraftEdit}
+                    onDraftSave={handleDraftSave}
+                    isDraftEdited={isDraftEdited}
+                    onGenerateDraft={handleGenerateDraft}
+                    isDraftLoading={isDraftLoading}
+                    draftError={draftError}
+                    baseRef={selectedArticle.baseRef}
+                    hasDraft={!!selectedArticle.draft}
+                  />
+                )}
+                {/* 変更理由・解説 */}
+                {selectedArticle.explanation && (
+                  <div>
+                    <p className="text-sm font-medium mb-1">変更理由・解説</p>
+                    <div className="p-3 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedArticle.explanation}</p>
+                    </div>
+                  </div>
+                )}
+                {/* 相互参照パネル */}
+                {crossRefGraph && (
+                  <CrossRefPanel
+                    articleNum={selectedArticle.articleNum}
+                    graph={crossRefGraph}
+                    onArticleClick={(articleNum) => {
+                      const a = articles.find((art) => art.articleNum === articleNum);
+                      if (a?.id) setSelectedId(a.id);
+                    }}
+                  />
+                )}
+                {/* 判断パネル */}
+                <ArticleDecisionPanel
+                  decision={(decisions[selId] ?? null) as import("@/components/review/article-decision-panel").ArticleDecision}
+                  onDecide={(d) => {
+                    if (d === null) return;
+                    handleDecision(selectedArticle, d as Decision);
+                  }}
+                  hasReformText={!!(selectedArticle.reformText || selectedArticle.draft)}
+                  hasOriginal={!!selectedArticle.original}
+                  hasManagementDraft={!!selectedArticle.managementDraft}
+                  memo={memos[selId] ?? ""}
+                  onMemoChange={handleMemoChange}
+                />
+                {memoSaveStatus !== "idle" && (
+                  <span className={`text-sm ${memoSaveStatus === "saving" ? "text-muted-foreground" : memoSaveStatus === "saved" ? "text-green-600" : "text-red-500"}`}>
+                    {memoSaveStatus === "saving" ? "保存中..." : memoSaveStatus === "saved" ? "保存済み" : "保存失敗"}
+                  </span>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </>)}
+
         {/* 一覧モード */}
         {viewMode === "table" && (<>
         {/* フィルタバー */}
@@ -588,7 +714,7 @@ function ReviewPageContent() {
         </div>
         {/* 一括操作バー（フィルタと分離） */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          <Button size="sm" variant="outline" onClick={handleApproveAllAi}>AI推奨を全て承認</Button>
+          <Button size="sm" variant="outline" onClick={handleApproveAllAi}>初稿を一括反映</Button>
           <Button size="sm" variant="outline" onClick={handleBulkAdopt} disabled={checkedIds.size === 0}>
             一括採用 ({checkedIds.size})
           </Button>
@@ -881,20 +1007,47 @@ function ReviewPageContent() {
                     </p>
                     <p className="text-base text-muted-foreground mt-1">
                       未決定の項目がある場合でもエクスポートできます。
-                      「AI推奨を全て承認」で残りを一括設定することもできます。
+                      「初稿を一括反映」で残りを一括設定することもできます（個別に変更可能）。
                     </p>
                   </>
                 )}
               </div>
-              <div className="flex gap-2 flex-shrink-0">
-                {!allDone && (
-                  <Button variant="outline" size="lg" onClick={handleApproveAllAi} data-test="review-approve-all">
-                    AI推奨を全て承認
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex gap-2 flex-shrink-0">
+                  {!allDone && (
+                    <Button variant="outline" size="lg" onClick={handleApproveAllAi} data-test="review-approve-all">
+                      初稿を一括反映
+                    </Button>
+                  )}
+                  {finalizeState === "done" ? (
+                    <Button size="lg" disabled variant="outline" data-test="review-finalized">
+                      <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                      確定済み
+                    </Button>
+                  ) : (
+                    <Button
+                      size="lg"
+                      variant="default"
+                      disabled={!allDone || finalizeState === "processing"}
+                      onClick={handleFinalize}
+                      data-test="review-finalize"
+                    >
+                      {finalizeState === "processing" ? (
+                        <><Spinner className="w-4 h-4 mr-1" />確定処理中...</>
+                      ) : (
+                        "最終確定"
+                      )}
+                    </Button>
+                  )}
+                  <Button asChild size="lg" data-test="review-next">
+                    <Link href="/export">エクスポートへ</Link>
                   </Button>
+                </div>
+                {finalizeMessage && (
+                  <p className={`text-sm ${finalizeState === "done" ? "text-green-600" : "text-red-500"}`}>
+                    {finalizeMessage}
+                  </p>
                 )}
-                <Button asChild size="lg" data-test="review-next">
-                  <Link href="/export">エクスポートへ</Link>
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -902,6 +1055,117 @@ function ReviewPageContent() {
       </main>
       </div>
       <AppFooter />
+    </div>
+  );
+}
+
+// ---------- 課題グループビュー ----------
+interface IssueGroupViewProps {
+  articles: ReviewArticle[];
+  decisions: Record<string, Decision | null>;
+  selectedId: string | null;
+  onArticleClick: (aid: string) => void;
+}
+
+/** issueGroup でグルーピングし、グループ内を importance 順にソートして表示 */
+function IssueGroupView({ articles, decisions, selectedId, onArticleClick }: IssueGroupViewProps) {
+  // issueGroup ごとにグルーピング
+  const groups = useMemo(() => {
+    const map = new Map<string, ReviewArticle[]>();
+    for (const a of articles) {
+      const group = a.issueGroup || "その他";
+      if (!map.has(group)) map.set(group, []);
+      map.get(group)!.push(a);
+    }
+    // グループ内を importance 順 → 条番号順にソート
+    for (const [, items] of map) {
+      items.sort((a, b) => {
+        const d = (IMPORTANCE_ORDER[a.importance] ?? 2) - (IMPORTANCE_ORDER[b.importance] ?? 2);
+        return d !== 0 ? d : extractNum(a.articleNum) - extractNum(b.articleNum);
+      });
+    }
+    // グループ順: 法的必須を含むグループを優先、次にグループ名順
+    const sorted = [...map.entries()].sort(([nameA, itemsA], [nameB, itemsB]) => {
+      const hasMandatoryA = itemsA.some((a) => a.importance === "mandatory") ? 0 : 1;
+      const hasMandatoryB = itemsB.some((a) => a.importance === "mandatory") ? 0 : 1;
+      if (hasMandatoryA !== hasMandatoryB) return hasMandatoryA - hasMandatoryB;
+      if (nameA === "その他") return 1;
+      if (nameB === "その他") return -1;
+      return nameA.localeCompare(nameB, "ja");
+    });
+    return sorted;
+  }, [articles]);
+
+  if (groups.length === 0) {
+    return <p className="p-8 text-center text-muted-foreground">該当する項目はありません。</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {groups.map(([groupName, items]) => {
+        const decidedCount = items.filter((a) => a.id && decisions[a.id]).length;
+        const hasMandatory = items.some((a) => a.importance === "mandatory");
+        return (
+          <Card key={groupName}>
+            <CardContent className="py-4">
+              {/* グループヘッダー */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-semibold">{groupName}</h3>
+                  {hasMandatory && (
+                    <Badge className="bg-red-500 text-white text-sm">法的必須あり</Badge>
+                  )}
+                </div>
+                <span className="text-sm text-muted-foreground">
+                  {decidedCount} / {items.length} 件判断済み
+                </span>
+              </div>
+              {/* グループ内の条文リスト */}
+              <div className="space-y-1">
+                {items.map((a) => {
+                  const aid = a.id ?? "";
+                  const isSel = selectedId === aid;
+                  const dec = decisions[aid];
+                  return (
+                    <button
+                      key={aid}
+                      type="button"
+                      className={`w-full text-left px-3 py-2 rounded-md transition-colors flex items-center gap-3 ${
+                        isSel
+                          ? "bg-primary/10 ring-1 ring-primary/30"
+                          : "hover:bg-muted/50"
+                      }`}
+                      onClick={() => onArticleClick(aid)}
+                    >
+                      {/* 条番号 */}
+                      <span className="font-medium text-sm whitespace-nowrap min-w-[5rem]">
+                        {a.articleNum}
+                      </span>
+                      {/* 重要度バッジ */}
+                      <Badge className={`text-sm shrink-0 ${IMPORTANCE_STYLE[a.importance] ?? IMPORTANCE_STYLE.optional}`}>
+                        {IMPORTANCE_LABEL[a.importance] ?? "任意"}
+                      </Badge>
+                      {/* 要約（truncate） */}
+                      <span className="text-sm text-muted-foreground truncate flex-1 min-w-0">
+                        {a.summary}
+                      </span>
+                      {/* 判断ステータス */}
+                      <span className="shrink-0">
+                        {dec === "adopted" && <Badge className="bg-green-500 text-white text-sm">採用</Badge>}
+                        {dec === "keep-current" && <Badge className="bg-gray-100 text-gray-800 border-gray-300 text-sm">現行維持</Badge>}
+                        {dec === "adopt-management" && <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-sm">管理会社案</Badge>}
+                        {dec === "modified" && <Badge className="bg-yellow-500 text-white text-sm">修正</Badge>}
+                        {dec === "pending" && <Badge className="bg-gray-400 text-white text-sm">保留</Badge>}
+                        {!dec && <Badge variant="outline" className="text-sm text-muted-foreground">未決定</Badge>}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

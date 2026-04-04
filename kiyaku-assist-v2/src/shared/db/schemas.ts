@@ -17,6 +17,8 @@ export const ProjectCreateSchema = z.object({
   hasCurrentRules: z.boolean(),
   documentType: z.enum(["management-rules", "usage-rules", "other-bylaws"]).default("management-rules"),
   currentStep: z.number().int().min(0).max(5).default(0),
+  version: z.enum(["draft", "reviewed", "finalized"]).optional(),
+  finalizedAt: z.string().nullable().optional(),
 });
 
 /** プロジェクト更新スキーマ */
@@ -28,6 +30,8 @@ export const ProjectUpdateSchema = z.object({
   hasCurrentRules: z.boolean().optional(),
   documentType: z.enum(["management-rules", "usage-rules", "other-bylaws"]).optional(),
   currentStep: z.number().int().min(0).max(5).optional(),
+  version: z.enum(["draft", "reviewed", "finalized"]).optional(),
+  finalizedAt: z.string().nullable().optional(),
 });
 
 /** 標準管理規約条文スキーマ */
@@ -71,5 +75,11 @@ export const ReviewArticleSchema = z.object({
   detailedBackground: z.string().optional(),
   issueGroup: z.string().optional(),
   managementDraft: z.string().nullable().optional(),
+  reviewAssignee: z.string().nullable().optional(),
+  reviewStatus: z.enum(["not-started", "in-review", "reviewed", "remanded"]).optional(),
+  meetingConclusion: z.string().nullable().optional(),
+  remandReason: z.string().nullable().optional(),
+  isFinalized: z.boolean().optional(),
+  finalizedAt: z.string().nullable().optional(),
   updatedAt: z.string().optional(),
 });

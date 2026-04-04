@@ -43,6 +43,13 @@ export interface Project {
   createdAt: string;
   /** 更新日時（ISO 文字列） */
   updatedAt: string;
+
+  // --- PRD v1.0 版管理 ---
+
+  /** 版ステータス */
+  version?: "draft" | "reviewed" | "finalized";
+  /** 最終確定日時（ISO 文字列 or Timestamp） */
+  finalizedAt?: string | null;
 }
 
 // ---------- レビュー記事 ----------
@@ -114,6 +121,21 @@ export interface ReviewArticle {
 
   /** 管理会社案テキスト（null = なし） */
   managementDraft?: string | null;
+
+  // --- PRD v1.0 レビュー台帳 ---
+
+  /** レビュー担当者名 */
+  reviewAssignee?: string | null;
+  /** レビュー状況 */
+  reviewStatus?: "not-started" | "in-review" | "reviewed" | "remanded";
+  /** フィードバック会の結論 */
+  meetingConclusion?: string | null;
+  /** 差戻し理由 */
+  remandReason?: string | null;
+  /** 最終確定フラグ */
+  isFinalized?: boolean;
+  /** 確定日時（ISO 文字列 or Timestamp） */
+  finalizedAt?: string | null;
 
   /** 更新日時（Firestore サーバータイムスタンプ） */
   updatedAt?: string;

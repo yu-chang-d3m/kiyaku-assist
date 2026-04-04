@@ -23,13 +23,10 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppFooter } from "@/components/layout/app-footer";
-import { startAnalysis, startAutoGenerate, loadParsedBylawsRemote, syncCurrentStep } from "@/shared/api-client";
+import { startAnalysis, startAutoGenerate, loadParsedBylawsRemote, syncCurrentStep, getReviewArticles } from "@/shared/api-client";
 import {
   loadParsedBylaws,
-  saveGapResults,
-  loadGapResults,
   loadProjectId,
-  saveProjectId,
   loadOnboarding,
 } from "@/shared/store";
 import { cn } from "@/lib/utils";
@@ -98,26 +95,28 @@ function AnalysisPageContent() {
   const controllerRef = useRef<AbortController | null>(null);
   const draftControllerRef = useRef<AbortController | null>(null);
 
-  /** パース済みデータの存在チェック + キャッシュ済み結果の読み込み */
+  /** Firestore 起点の初期化: projectId → パース済みデータ → 既存分析結果の確認 */
   useEffect(() => {
     (async () => {
-      let parsed = loadParsedBylaws();
+      // projectId がなければオンボーディングへリダイレクト
+      const projectId = loadProjectId();
+      if (!projectId) {
+        router.push("/onboarding");
+        return;
+      }
 
-      // sessionStorage にない場合は Firestore からフォールバック取得
+      // Firestore からパース済みデータを取得（sessionStorage はキャッシュとして利用）
+      let parsed = loadParsedBylaws();
       if (!parsed) {
-        const pid = loadProjectId();
-        if (pid) {
-          try {
-            const remote = await loadParsedBylawsRemote(pid);
-            if (remote) {
-              // eslint-disable-next-line @typescript-eslint/no-require-imports -- dynamic import
-              const { saveParsedBylaws: savePB } = await import("@/shared/store");
-              savePB(remote);
-              parsed = remote;
-            }
-          } catch {
-            // Firestore 取得に失敗 → パースなし扱い
+        try {
+          const remote = await loadParsedBylawsRemote(projectId);
+          if (remote) {
+            const { saveParsedBylaws: savePB } = await import("@/shared/store");
+            savePB(remote);
+            parsed = remote;
           }
+        } catch {
+          // Firestore 取得に失敗 → パースなし扱い
         }
       }
 
@@ -126,12 +125,28 @@ function AnalysisPageContent() {
         return;
       }
 
-      // 既にストアに分析結果がある場合はそれを使う
-      const cached = loadGapResults();
-      if (cached && cached.length > 0) {
-        setResults(cached);
-        setPhase("done");
-        return;
+      // Firestore に既存の分析結果があるか確認
+      try {
+        const { articles: saved } = await getReviewArticles(projectId);
+        if (saved && saved.length > 0) {
+          const recovered: GapAnalysisItem[] = saved.map((a) => ({
+            articleNum: a.articleNum,
+            category: a.category,
+            currentText: a.original,
+            standardText: "",
+            standardRef: a.baseRef ?? "",
+            gapSummary: a.summary,
+            gapType: a.gapType ?? (a.importance === "mandatory" ? "outdated" : "partial"),
+            importance: a.importance,
+            rationale: a.explanation ?? "",
+            relatedLawRefs: a.relatedLawRefs ?? [],
+          }));
+          setResults(recovered);
+          setPhase("done");
+          return;
+        }
+      } catch {
+        // Firestore 取得失敗 → 分析未実施として続行
       }
 
       // データはあるが分析未実施 → 準備完了
@@ -147,11 +162,11 @@ function AnalysisPageContent() {
       return;
     }
 
-    // projectId がない場合は一時 ID を作成し、必ず sessionStorage に保存
-    let projectId = loadProjectId();
+    // projectId がない場合はオンボーディングへリダイレクト
+    const projectId = loadProjectId();
     if (!projectId) {
-      projectId = `project-${Date.now()}`;
-      saveProjectId(projectId);
+      router.push("/onboarding");
+      return;
     }
 
     // パース済み条文を分析 API の入力形式に変換（全テキストを結合）
@@ -207,8 +222,7 @@ function AnalysisPageContent() {
       },
       onComplete: (data: AnalysisResult) => {
         setResults(data.items);
-        saveGapResults(data.items);
-        // 分析完了 → 自動ドラフト生成フェーズへ
+        // 分析完了 → 自動ドラフト生成フェーズへ（結果は API 側で Firestore に保存済み）
         handleStartDrafting(projectId);
       },
       onError: async (message) => {
@@ -216,7 +230,6 @@ function AnalysisPageContent() {
         // 接続切れの場合: サーバー側では完了している可能性があるため Firestore を確認
         if (message.includes("接続が切れました") && projectId) {
           try {
-            const { getReviewArticles } = await import("@/shared/api-client");
             const { articles: saved } = await getReviewArticles(projectId);
             if (saved && saved.length > 0) {
               // Firestore に結果がある → 分析+ドラフトは完了済み
@@ -227,13 +240,12 @@ function AnalysisPageContent() {
                 standardText: "",
                 standardRef: a.baseRef ?? "",
                 gapSummary: a.summary,
-                gapType: a.importance === "mandatory" ? "outdated" : "partial",
+                gapType: a.gapType ?? (a.importance === "mandatory" ? "outdated" : "partial"),
                 importance: a.importance,
                 rationale: a.explanation ?? "",
-                relatedLawRefs: [],
+                relatedLawRefs: a.relatedLawRefs ?? [],
               }));
               setResults(recovered);
-              saveGapResults(recovered);
               setPhase("done");
               return;
             }
@@ -524,9 +536,8 @@ function AnalysisPageContent() {
                 <Button
                   onClick={async () => {
                     const pid = loadProjectId();
-                    if (!pid) { handleStartAnalysis(); return; }
+                    if (!pid) { router.push("/onboarding"); return; }
                     try {
-                      const { getReviewArticles } = await import("@/shared/api-client");
                       const { articles: saved } = await getReviewArticles(pid);
                       if (saved && saved.length > 0) {
                         const recovered: GapAnalysisItem[] = saved.map((a) => ({
@@ -536,13 +547,12 @@ function AnalysisPageContent() {
                           standardText: "",
                           standardRef: a.baseRef ?? "",
                           gapSummary: a.summary,
-                          gapType: a.importance === "mandatory" ? "outdated" : "partial",
+                          gapType: a.gapType ?? (a.importance === "mandatory" ? "outdated" : "partial"),
                           importance: a.importance,
                           rationale: a.explanation ?? "",
-                          relatedLawRefs: [],
+                          relatedLawRefs: a.relatedLawRefs ?? [],
                         }));
                         setResults(recovered);
-                        saveGapResults(recovered);
                         setPhase("done");
                       } else {
                         handleStartAnalysis();

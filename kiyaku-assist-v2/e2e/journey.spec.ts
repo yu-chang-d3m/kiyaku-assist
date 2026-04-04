@@ -205,15 +205,16 @@ test.describe("カスタマージャーニー通しテスト", () => {
     // ── Step 4: 分析 ──
     let analysisSucceeded = false;
     await test.step("4. 分析 — 分析を開始して完了を待機", async () => {
-      // 分析開始ボタンが表示されるのを待つ
       const startBtn = page.locator('[data-test="analysis-start"]');
       const nextBtn = page.locator('[data-test="analysis-next"]');
       const errorHeading = page.getByText("エラーが発生しました", {
         exact: false,
       });
 
-      // 分析開始ボタンがある場合のみクリック（キャッシュ済みの場合はスキップ）
-      if ((await startBtn.count()) > 0) {
+      // ページのレンダリングを待つ: 「分析を開始」か「次のステップへ」のどちらかが表示されるまで
+      await expect(startBtn.or(nextBtn)).toBeVisible({ timeout: 30_000 });
+
+      if (await startBtn.isVisible()) {
         await startBtn.click();
 
         // 分析完了 or エラーのどちらかを待機（最大3分）
@@ -221,14 +222,13 @@ test.describe("カスタマージャーニー通しテスト", () => {
           timeout: 180_000,
         });
 
-        if ((await errorHeading.count()) > 0) {
+        if (await errorHeading.isVisible()) {
           // エラー発生 — 「処理結果を確認する」で部分結果があるか試す
           const restoreBtn = page.getByRole("button", {
             name: "処理結果を確認する",
           });
-          if ((await restoreBtn.count()) > 0) {
+          if (await restoreBtn.isVisible()) {
             await restoreBtn.click();
-            // 結果復元後に次へボタンが出るか確認（10秒）
             try {
               await expect(nextBtn).toBeVisible({ timeout: 10_000 });
               analysisSucceeded = true;
@@ -243,11 +243,6 @@ test.describe("カスタマージャーニー通しテスト", () => {
         }
       } else {
         // 既にキャッシュされた結果が表示されている
-        await expect(
-          nextBtn.or(
-            page.getByRole("link", { name: "次のステップへ" }),
-          ),
-        ).toBeVisible({ timeout: 30000 });
         analysisSucceeded = true;
       }
     });
